@@ -1,0 +1,38 @@
+Package: tardoc
+Title: Generate Documentation and Analytics for targets Pipelines
+Version: 0.6.0
+Authors@R: person("Cathal", "Byrne", email = "cathal.byrne@cso.ie", role = c("aut", "cre"))
+Description: Auto-generates documentation for targets pipelines across four tiers:
+    (1) A self-contained HTML viewer with Fuse.js search and mermaid graphs;
+    (2) A DuckDB WASM analytics viewer with full SQL, BM25 search, dplyr syntax,
+    and recursive lineage queries — self-contained, opens as file://;
+    (3) A Quack-protocol server analytics viewer with BERT semantic search
+    (quackformers), FAISS ANN index, function call graph (sitting_duck), and
+    git history (duck_tails);
+    (4) An LLM chat interface over the pipeline database via ellmer, supporting
+    OpenAI, Anthropic, Ollama, llama.cpp, and any OpenAI-compatible provider.
+    The pipeline database is also exposable as an MCP server (duckdb_mcp) for
+    use with Claude Desktop and Claude Code. When llm=TRUE, descriptions are
+    auto-generated for undescribed targets and explanations added to function
+    pages.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.2
+Imports:
+    targets,
+    dplyr,
+    purrr,
+    stringr,
+    roxygen2,
+    Rd2md,
+    jsonlite
+Suggests:
+    callr,
+    DBI,
+    devtools,
+    duckdb,
+    ellmer,
+    httpuv,
+    testthat (>= 3.0.0),
+    withr
