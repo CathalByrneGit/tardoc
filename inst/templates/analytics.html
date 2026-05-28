@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{PKG_NAME}} &mdash; Analytics</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f8f9fa;
+     color:#212529;height:100vh;display:flex;flex-direction:column;overflow:hidden}
+#hdr{background:#1e1e2e;color:#cdd6f4;padding:10px 20px;display:flex;align-items:center;
+     gap:10px;flex-shrink:0;border-bottom:1px solid #313244}
+#hdr h1{font-size:14px;font-weight:600;color:#cba6f7}
+.chip{font-size:10px;color:#6c7086;background:#313244;padding:2px 8px;border-radius:4px}
+#badge{margin-left:auto;font-size:11px;padding:3px 10px;border-radius:4px;
+       background:#78350f;color:#fef3c7}
+#badge.ok{background:#1c7a40;color:#d1fae5}
+#badge.err{background:#7f1d1d;color:#fee2e2}
+#body{display:flex;flex:1;overflow:hidden}
+#sb{width:220px;min-width:220px;background:#1e1e2e;overflow-y:auto;padding:8px;
+    border-right:1px solid #313244}
+.ss{font-size:10px;text-transform:uppercase;letter-spacing:.7px;color:#585b70;
+    padding:10px 6px 4px;margin-top:6px}
+.ss:first-child{margin-top:0}
+.qb{display:block;width:100%;text-align:left;padding:6px 8px;background:none;
+    border:none;border-radius:4px;color:#cdd6f4;font-size:12px;cursor:pointer}
+.qb:hover{background:#313244;color:#cba6f7}
+.sbi{width:100%;padding:6px 8px;border:1px solid #313244;border-radius:4px;
+     background:#313244;color:#cdd6f4;font-size:11px;outline:none;margin:2px 0}
+.sbi::placeholder{color:#585b70}
+.sba{width:100%;padding:6px;border:none;border-radius:4px;font-size:11px;
+     cursor:pointer;margin-top:3px;font-weight:500}
+.sba.p{background:#6d28d9;color:#fff}
+.sba.o{background:#313244;color:#a6e3a1;border:1px solid #40a02b}
+#main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+#tabs{display:flex;background:#fff;border-bottom:1px solid #e9ecef;padding:0 16px;flex-shrink:0}
+.tab{padding:10px 16px;border:none;background:none;font-size:13px;cursor:pointer;
+     color:#6c7086;border-bottom:2px solid transparent;font-weight:500}
+.tab.active{color:#6d28d9;border-bottom-color:#6d28d9}
+#sql-panel{display:flex;flex-direction:column;flex:1;overflow:hidden}
+#ew{padding:12px 16px;background:#fff;border-bottom:1px solid #e9ecef;flex-shrink:0}
+.mr{display:flex;gap:4px;margin-bottom:6px}
+.mb.active{background:#6d28d9;color:#fff;border-color:#6d28d9}
+#sql-ed{width:100%;height:68px;padding:8px;border:1px solid #dee2e6;border-radius:5px;
+        font-family:"SF Mono",Monaco,monospace;font-size:12px;resize:vertical;outline:none}
+#sql-ed:focus{border-color:#6d28d9}
+.rr{display:flex;align-items:center;gap:10px;margin-top:6px}
+#run-btn{padding:6px 16px;background:#6d28d9;color:#fff;border:none;border-radius:5px;
+         font-size:12px;cursor:pointer;font-weight:500}
+#run-btn:disabled{background:#9ca3af;cursor:not-allowed}
+#res{flex:1;overflow:auto;padding:12px 16px}
+#rmeta{font-size:11px;color:#6c7086;margin-bottom:6px}
+#chat-panel{display:none;flex-direction:column;flex:1;overflow:hidden}
+#chat-disabled{padding:48px;text-align:center;color:#9ca3af}
+#chat-disabled code{background:#f1f3f5;padding:2px 6px;border-radius:3px;font-size:12px;font-family:monospace}
+#msgs{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px}
+.msg{border-radius:10px;padding:10px 14px;font-size:13px;line-height:1.6;max-width:85%}
+.msg.user{background:#6d28d9;color:#fff;align-self:flex-end;border-bottom-right-radius:2px}
+.msg.bot{background:#fff;border:1px solid #e9ecef;align-self:flex-start;
+          border-bottom-left-radius:2px;max-width:90%}
+.msg.note{background:#f0f4ff;border:1px solid #c7d2fe;color:#3730a3;font-size:11px;
+           align-self:center;border-radius:6px}
+.msg.thinking{background:#f9fafb;border:1px dashed #d1d5db;align-self:flex-start;
+               color:#9ca3af;font-style:italic;font-size:12px}
+.sql-box{margin:6px 0;background:#1e1e2e;color:#cdd6f4;border-radius:6px;padding:8px 12px;
+          font-family:monospace;font-size:11px;overflow-x:auto}
+.sql-lbl{font-size:10px;color:#6c7086;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px}
+.res-tbl{margin-top:6px;overflow-x:auto;font-size:11px}
+.res-tbl table th{background:#f8f9ff;padding:4px 8px}
+.res-tbl table td{padding:3px 8px}
+#starters{padding:24px;display:flex;flex-direction:column;align-items:center;gap:8px}
+#starters h2{font-size:15px;color:#374151;margin-bottom:2px}
+#starters p{font-size:12px;color:#9ca3af;margin-bottom:10px}
+.sg{display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%;max-width:540px}
+.sc{background:#fff;border:1px solid #e9ecef;border-radius:8px;padding:10px 12px;
+    cursor:pointer;text-align:left;font-size:12px;color:#374151;line-height:1.5}
+.sc:hover{border-color:#6d28d9;color:#6d28d9}
+.sc .si{font-size:16px;display:block;margin-bottom:4px}
+.sc .sl{font-weight:600;font-size:10px;color:#6c7086;text-transform:uppercase;
+         letter-spacing:.4px;display:block;margin-bottom:2px}
+#cir{background:#fff;border-top:1px solid #e9ecef;padding:10px 16px;
+     display:flex;gap:8px;flex-shrink:0}
+#ci{flex:1;padding:8px 12px;border:1px solid #dee2e6;border-radius:20px;
+    font-size:13px;outline:none;font-family:inherit}
+#ci:focus{border-color:#6d28d9}
+#sb-btn{padding:8px 16px;background:#6d28d9;color:#fff;border:none;border-radius:20px;
+        font-size:13px;cursor:pointer;font-weight:500}
+#clr-btn{padding:8px 10px;background:none;border:1px solid #dee2e6;border-radius:20px;
+          font-size:11px;color:#9ca3af;cursor:pointer}
+#clr-btn:hover{border-color:#6d28d9;color:#6d28d9}
+table{border-collapse:collapse;width:100%;font-size:12px}
+th{background:#f1f3f5;padding:6px 10px;text-align:left;border:1px solid #dee2e6;font-weight:600;white-space:nowrap}
+td{padding:5px 10px;border:1px solid #dee2e6;max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+tr:hover td{background:#f8f9fa}
+.badge{display:inline-block;padding:1px 7px;border-radius:10px;font-size:10px;font-weight:600}
+.ok{background:#d1fae5;color:#065f46}.err{background:#fee2e2;color:#991b1b}.na{background:#f3f4f6;color:#6b7280}
+.ebox{background:#fee2e2;border:1px solid #fca5a5;border-radius:5px;padding:10px;font-size:12px;color:#991b1b;font-family:monospace;white-space:pre-wrap}
+.loading{color:#9ca3af;font-style:italic;padding:20px;text-align:center;font-size:13px}
+code{background:#f1f3f5;padding:1px 5px;border-radius:3px;font-size:11px;font-family:monospace}
+</style>
+</head>
+<body>
+<div id="hdr">
+  <h1>&#128202; {{PKG_NAME}}</h1>
+  <span class="chip" id="mode-chip">Quack</span>
+  <span id="badge">Connecting&hellip;</span>
+</div>
+<div id="body">
+  <div id="sb">
+    <div class="ss">Search</div>
+    <input id="fts-i" class="sbi" type="search" placeholder="Full-text search&hellip;">
+    <button class="sba p" onclick="runFts()">BM25 Search</button>
+    <div id="sem-wrap" style="display:none">
+      <input id="sem-i" class="sbi" type="search" placeholder="Semantic (BERT)&hellip;" style="margin-top:4px">
+      <button class="sba o" onclick="runSemantic()">&#128269; Semantic</button>
+    </div>
+    <div class="ss">Quick queries</div>
+    <button class="qb" onclick="runQ(Q.status)">&#128202; Status summary</button>
+    <button class="qb" onclick="runQ(Q.errored)">&#10060; Errored targets</button>
+    <button class="qb" onclick="runQ(Q.connected)">&#128279; Most connected</button>
+    <button class="qb" onclick="runQ(Q.nodesc)">&#128196; Missing descriptions</button>
+    <button class="qb" onclick="runQ(Q.fnusage)">&#128736; Function usage</button>
+    <button class="qb" onclick="runQ(Q.all_t)">&#127919; All targets</button>
+    <button class="qb" onclick="runQ(Q.all_f)">&#128296; All functions</button>
+    <div class="ss">Lineage</div>
+    <input id="lin-i" class="sbi" type="text" placeholder="Target name&hellip;">
+    <button class="sba p"  onclick="runUp()">&#8593; Upstream</button>
+    <button class="sba o"  onclick="runDown()">&#8595; Downstream</button>
+    <div class="ss">Tables</div>
+    <div style="padding:0 4px;font-size:10px;color:#585b70;line-height:1.8">
+      <code>targets</code>&nbsp;<code>functions</code>&nbsp;<code>edges</code>
+    </div>
+  </div>
+  <div id="main">
+    <div id="tabs">
+      <button class="tab active" onclick="showTab('sql')">SQL / dplyr</button>
+      <button class="tab"        onclick="showTab('chat')">&#129302; Chat</button>
+    </div>
+    <div id="sql-panel">
+      <div id="ew">
+        <textarea id="sql-ed" spellcheck="false"
+          placeholder="SELECT * FROM targets LIMIT 10;&#10;-- dplyr syntax also works if extension loaded&#10;-- Ctrl+Enter to run"></textarea>
+        <div class="rr">
+          <button id="run-btn" onclick="runCustom()" disabled>&#9654; Run</button>
+          <span id="qt" style="font-size:11px;color:#6c7086"></span>
+          <span style="font-size:11px;color:#9ca3af;margin-left:auto">Ctrl+Enter</span>
+        </div>
+      </div>
+      <div id="res">
+        <div class="loading" id="init-msg"></div>
+        <div id="rmeta"></div><div id="rtable"></div>
+      </div>
+    </div>
+    <div id="chat-panel">
+      <div id="chat-disabled" style="display:none">
+        <p style="font-size:24px;margin-bottom:12px">&#129302;</p>
+        <h3 style="color:#374151;margin-bottom:8px">Chat not configured</h3>
+        <p style="margin-bottom:16px;font-size:13px">Pass an ellmer Chat object to enable:</p>
+        <p><code>view_tardoc_db(llm_chat = ellmer::chat_openai())</code></p>
+        <p style="margin-top:8px"><code>view_tardoc_db(llm_chat = ellmer::chat_ollama("llama3.2"))</code></p>
+      </div>
+      <div id="msgs">
+        <div id="starters">
+          <h2>Ask about your pipeline</h2>
+          <p>Type a question or choose a prompt</p>
+          <div class="sg">
+            <button class="sc" onclick="useSc(this)">
+              <span class="si">&#128218;</span><span class="sl">Onboarding</span>
+              Give me an overview of this pipeline — what it does, the main data flow, and any targets I should know first.
+            </button>
+            <button class="sc" onclick="useSc(this)">
+              <span class="si">&#9889;</span><span class="sl">Impact analysis</span>
+              If I need to change how clean_data works, which downstream targets would be affected and why?
+            </button>
+            <button class="sc" onclick="useSc(this)">
+              <span class="si">&#128680;</span><span class="sl">Health check</span>
+              Are there any problems? Look for errored targets, missing descriptions, or anything unusual.
+            </button>
+            <button class="sc" onclick="useSc(this)">
+              <span class="si">&#128269;</span><span class="sl">Explore</span>
+              What are the most critical targets — the ones that the most downstream work depends on?
+            </button>
+          </div>
+        </div>
+      </div>
+      <div id="cir">
+        <button id="clr-btn" onclick="clearChat()" title="Clear">&#8635;</button>
+        <textarea id="ci" placeholder="Ask anything about your pipeline&hellip;" rows="1"
+          onkeydown="chatKey(event)" oninput="autoResize(this)"></textarea>
+        <button id="sb-btn" onclick="sendChat()">Send</button>
+      </div>
+    </div>
+  </div>
+</div>
+<script type=\"module\">
+const QUACK_TOKEN = '__QUACK_TOKEN__';
+const QUACK_PORT  = __QUACK_PORT__;
+const HAS_FAISS   = __HAS_FAISS__;
+const LLM_ENABLED = __LLM_ENABLED__;
+
+let conn = null, prefix = '';
+
+async function init() {
+  const badge = document.getElementById('badge');
+  const msg   = document.getElementById('init-msg');
+  badge.textContent = 'Connecting&hellip;'; badge.className = '';
+  try {
+    msg.style.display = 'none';  // status shown in badge only
+    const duckdb = await import('https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@latest/+esm');
+    const bundle = await duckdb.selectBundle(duckdb.getJsDelivrBundles());
+    const worker = new Worker(URL.createObjectURL(
+      new Blob([`importScripts("${bundle.mainWorker}");`], {type:'text/javascript'})
+    ));
+    const db = new duckdb.AsyncDuckDB(new duckdb.ConsoleLogger(duckdb.LogLevel.WARNING), worker);
+    await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
+    conn = await db.connect();
+
+    for (const ext of ['fts','dplyr']) {
+      try { await conn.query(`LOAD ${ext};`); } catch {
+        try { await conn.query(`INSTALL ${ext}; LOAD ${ext};`); } catch {}
+      }
+    }
+
+    try {
+      try { await conn.query('LOAD quack;'); }
+      catch { await conn.query('INSTALL quack FROM core_nightly; LOAD quack;'); }
+      await conn.query(`CREATE SECRET qs (TYPE quack, TOKEN '${QUACK_TOKEN}');`);
+      await conn.query(`ATTACH 'quack:localhost:${QUACK_PORT}' AS tardoc (READ_ONLY);`);
+      prefix = 'tardoc.';
+      badge.textContent = 'Quack'; badge.className = 'ok';
+      document.getElementById('mode-chip').textContent = 'Quack';
+    } catch {
+      await loadJson();
+      badge.textContent = 'JSON'; badge.className = '';
+      document.getElementById('mode-chip').textContent = 'JSON';
+    }
+
+    if (HAS_FAISS) document.getElementById('sem-wrap').style.display = '';
+    if (!LLM_ENABLED) {
+      document.getElementById('chat-disabled').style.display = '';
+      document.getElementById('starters').style.display = 'none';
+      document.getElementById('cir').style.display = 'none';
+    }
+
+    msg.style.display = 'none';
+    document.getElementById('run-btn').disabled = false;
+    runQ(Q.status);
+  } catch(e) {
+    msg.textContent = 'Error: ' + e.message;
+    badge.textContent = 'Error'; badge.className = 'err';
+  }
+}
+
+async function loadJson() {
+  const d = await (await fetch("tardoc_analytics.json")).json();
+  for (const [t,arr] of [["targets",d.targets],["functions",d.functions],["edges",d.edges]]) {
+    await db.registerFileText(t + ".json", JSON.stringify(arr));
+    const sq = String.fromCharCode(39);
+    await conn.query("CREATE OR REPLACE TABLE " + t + " AS SELECT * FROM read_json(" + sq + t + ".json" + sq + ")");
+  }
+}
+
+const Q = {
+  status:    `SELECT status,COUNT(*) n,ROUND(COUNT(*)*100.0/SUM(COUNT(*)) OVER(),1) pct FROM __P__targets GROUP BY status ORDER BY n DESC`,
+  errored:   `SELECT name,status,last_built,command FROM __P__targets WHERE status='errored' ORDER BY name`,
+  connected: `SELECT name,description,status,n_upstream,n_downstream,n_upstream+n_downstream total FROM __P__targets ORDER BY total DESC LIMIT 20`,
+  nodesc:    `SELECT name,command,status FROM __P__targets WHERE description='' ORDER BY name`,
+  fnusage:   `SELECT e.from_target fn,COUNT(*) uses,STRING_AGG(e.to_target,', ') targets FROM __P__edges e JOIN __P__functions f ON f.name=e.from_target GROUP BY e.from_target ORDER BY uses DESC`,
+  all_t:     `SELECT name,description,status,last_built,n_upstream,n_downstream FROM __P__targets ORDER BY name`,
+  all_f:     `SELECT name,description,source_file FROM __P__functions ORDER BY name`
+};
+const rq = s => s.replace(/__P__/g, prefix);
+const runQ = s => { document.getElementById('sql-ed').value=rq(s).trim(); exec(rq(s)); };
+const runCustom = () => { const s=document.getElementById('sql-ed').value.trim(); if(s) exec(s); };
+
+function runFts() {
+  const q=document.getElementById('fts-i').value.trim(); if(!q) return;
+  const e=q.split(String.fromCharCode(39)).join(String.fromCharCode(92,39));
+  const tp=(prefix+'targets').replace('.','_'), fp=(prefix+'functions').replace('.','_');
+  runQ(`SELECT * FROM (SELECT 'target' AS type,name,description,status,fts_main_${tp}.match_bm25(name,'${e}') AS score FROM __P__targets UNION ALL SELECT 'function' AS type,name,description,'' AS status,fts_main_${fp}.match_bm25(name,'${e}') AS score FROM __P__functions) t WHERE score IS NOT NULL ORDER BY score DESC`);
+}
+function runSemantic() {
+  const q=document.getElementById('sem-i').value.trim(); if(!q||!HAS_FAISS) return;
+  const e=q.split(String.fromCharCode(39)).join(String.fromCharCode(92,39));
+  runQ(`SELECT t.name,t.description,t.status,row_number() OVER() rank FROM __P__targets t JOIN (SELECT UNNEST(FAISS_SEARCH('target_semantic',10,embed('${e}'))) rowid) i ON t.rowid=i.rowid ORDER BY rank`);
+}
+function runUp() {
+  const t=document.getElementById('lin-i').value.trim(); if(!t) return;
+  runQ(`WITH RECURSIVE up AS (SELECT from_target name,1 depth FROM __P__edges WHERE to_target='${t}' UNION ALL SELECT e.from_target,u.depth+1 FROM __P__edges e JOIN up u ON e.to_target=u.name WHERE u.depth<20) SELECT DISTINCT name,depth FROM up ORDER BY depth,name`);
+}
+function runDown() {
+  const t=document.getElementById('lin-i').value.trim(); if(!t) return;
+  runQ(`WITH RECURSIVE dn AS (SELECT to_target name,1 depth FROM __P__edges WHERE from_target='${t}' UNION ALL SELECT e.to_target,d.depth+1 FROM __P__edges e JOIN dn d ON e.from_target=d.name WHERE d.depth<20) SELECT DISTINCT name,depth FROM dn ORDER BY depth,name`);
+}
+
+async function exec(sql) {
+  if(!conn) return;
+  document.getElementById('rmeta').textContent='';
+  document.getElementById('rtable').innerHTML='<div class="loading">Running&hellip;</div>';
+  const t0=performance.now();
+  try {
+    const r=await conn.query(sql), ms=(performance.now()-t0).toFixed(0);
+    const rows=r.toArray().map(x=>Object.fromEntries(r.schema.fields.map(f=>[f.name,x[f.name]])));
+    const cols=r.schema.fields.map(f=>f.name);
+    document.getElementById('rmeta').textContent=`${rows.length} rows · ${ms}ms`;
+    document.getElementById('qt').textContent=ms+'ms';
+    document.getElementById('rtable').innerHTML = rows.length ? tbl(cols,rows) :
+      '<p style="color:#9ca3af;padding:12px">No rows.</p>';
+  } catch(e) {
+    document.getElementById('rtable').innerHTML=`<div class="ebox">${e.message}</div>`;
+  }
+}
+
+function tbl(cols,rows,max=500) {
+  let h='<div style="overflow-x:auto"><table><thead><tr>'+cols.map(c=>`<th>${c}</th>`).join('')+'</tr></thead><tbody>';
+  rows.slice(0,max).forEach(r=>{
+    h+='<tr>'+cols.map(c=>{
+      const v=r[c]==null?'':String(r[c]);
+      if(c==='status'){ const cl=v==='uptodate'?'ok':v==='errored'?'err':'na'; return `<td><span class="badge ${cl}">${v}</span></td>`; }
+      return `<td title="${v.replace(/"/g,'&quot;')}">${v}</td>`;
+    }).join('')+'</tr>';
+  });
+  if(rows.length>max) h+=`<tr><td colspan="${cols.length}" style="color:#9ca3af;text-align:center;padding:6px">&hellip;${rows.length-max} more</td></tr>`;
+  return h+'</tbody></table></div>';
+}
+
+
+function showTab(t) {
+  const sql=t==='sql';
+  document.getElementById('sql-panel').style.display=sql?'flex':'none';
+  document.getElementById('chat-panel').style.display=sql?'none':'flex';
+  document.querySelectorAll('.tab').forEach((b,i)=>b.classList.toggle('active',(i===0&&sql)||(i===1&&!sql)));
+}
+
+async function sendChat() {
+  const ci=document.getElementById('ci'), msg=ci.value.trim();
+  if(!msg||!LLM_ENABLED) return;
+  ci.value=''; ci.style.height='40px';
+  document.getElementById('starters').style.display='none';
+  addMsg('user', msg);
+  const thinking=addSpecial('thinking','&bull;&bull;&bull;');
+  try {
+    const resp=await fetch('/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:msg})});
+    if(!resp.ok) throw new Error('Server error '+resp.status);
+    const data=await resp.json();
+    thinking.remove();
+    const botDiv=addMsg('bot','');
+    if(data.sql_calls?.length) {
+      data.sql_calls.forEach(c=>{
+        if(c.explanation){ const l=document.createElement('div'); l.className='sql-lbl'; l.textContent='&#128202; '+c.explanation; botDiv.appendChild(l); }
+        const b=document.createElement('div'); b.className='sql-box'; b.textContent=c.sql; botDiv.appendChild(b);
+        if(c.rows?.length){ const rt=document.createElement('div'); rt.className='res-tbl'; rt.innerHTML=tbl(c.columns,c.rows,10); botDiv.appendChild(rt); }
+      });
+      const hr=document.createElement('hr'); hr.style.cssText='border:none;border-top:1px solid #e9ecef;margin:8px 0'; botDiv.appendChild(hr);
+    }
+    const txt=document.createElement('pre');
+    txt.style.cssText='white-space:pre-wrap;font-family:inherit;font-size:13px;margin:0;';
+    txt.textContent=data.response||'(no response)';
+    botDiv.appendChild(txt);
+  } catch(e) { thinking.remove(); addSpecial('note','Error: '+e.message); }
+  document.getElementById('msgs').scrollTop=99999;
+}
+
+async function clearChat() {
+  await fetch('/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({clear:true})}).catch(()=>{});
+  const msgs=document.getElementById('msgs'); msgs.innerHTML='';
+  document.getElementById('starters').style.display=''; msgs.appendChild(document.getElementById('starters'));
+}
+
+function addMsg(role,text) {
+  const msgs=document.getElementById('msgs'),d=document.createElement('div');
+  d.className='msg '+role; if(text) d.textContent=text; msgs.appendChild(d); msgs.scrollTop=msgs.scrollHeight; return d;
+}
+function addSpecial(cls,html) {
+  const msgs=document.getElementById('msgs'),d=document.createElement('div');
+  d.className='msg '+cls; d.innerHTML=html; msgs.appendChild(d); msgs.scrollTop=msgs.scrollHeight; return d;
+}
+function useSc(btn) {
+  const t=Array.from(btn.childNodes).filter(n=>n.nodeType===3).map(n=>n.textContent.trim()).join(' ').trim();
+  document.getElementById('ci').value=t; sendChat();
+}
+function chatKey(e) { if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendChat();} }
+function autoResize(el) { el.style.height='auto'; el.style.height=Math.min(el.scrollHeight,120)+'px'; }
+
+document.getElementById('sql-ed').addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key==='Enter') runCustom();});
+document.getElementById('fts-i').addEventListener('keydown',e=>{if(e.key==='Enter') runFts();});
+document.getElementById('sem-i').addEventListener('keydown',e=>{if(e.key==='Enter') runSemantic();});
+document.getElementById('lin-i').addEventListener('keydown',e=>{if(e.key==='Enter') runUp();});
+
+Object.assign(window,{showTab,runQ,runFts,runSemantic,runCustom,runUp,runDown,sendChat,clearChat,useSc,chatKey,autoResize,Q});
+init();
+</script>
+</body>
+</html>

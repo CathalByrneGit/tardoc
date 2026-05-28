@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{PKG_NAME}}</title>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/fuse.js/dist/fuse.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+     display:flex;height:100vh;overflow:hidden;background:#f8f9fa;color:#212529}
+#sidebar{width:280px;min-width:280px;background:#1e1e2e;color:#cdd6f4;
+         display:flex;flex-direction:column;overflow:hidden}
+#sidebar-header{padding:16px;border-bottom:1px solid #313244}
+#sidebar-header h1{font-size:14px;font-weight:600;color:#cba6f7;
+                    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#search-box{width:100%;padding:8px 10px;background:#313244;border:none;
+            border-radius:6px;color:#cdd6f4;font-size:13px;margin-top:10px;outline:none}
+#search-box::placeholder{color:#6c7086}
+#nav-home{padding:8px 16px;cursor:pointer;font-size:12px;color:#6c7086;
+          border-bottom:1px solid #313244;display:flex;align-items:center;gap:6px}
+#nav-home:hover{color:#cba6f7;background:#313244}
+#nav-tabs{display:flex;border-bottom:1px solid #313244}
+.nav-tab{flex:1;padding:8px;background:none;border:none;color:#6c7086;
+         font-size:12px;cursor:pointer;font-weight:500}
+.nav-tab.active{color:#cba6f7;border-bottom:2px solid #cba6f7}
+#nav-list{overflow-y:auto;flex:1;padding:8px 0}
+.nav-item{padding:7px 16px;cursor:pointer;font-size:13px;
+          border-left:3px solid transparent;white-space:nowrap;
+          overflow:hidden;text-overflow:ellipsis}
+.nav-item:hover{background:#313244}
+.nav-item.active{background:#313244;border-left-color:#cba6f7;color:#cba6f7}
+.badge{display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;margin-left:8px}
+.badge-ok{background:#d1fae5;color:#065f46}
+.badge-err{background:#fee2e2;color:#991b1b}
+.badge-na{background:#f3f4f6;color:#6b7280}
+#main{flex:1;overflow:hidden;display:flex;flex-direction:column}
+#content-area{flex:1;overflow-y:auto;padding:32px 40px}
+#home-panel{max-width:900px;margin:0 auto}
+#home-panel h1{font-size:28px;margin-bottom:8px}
+#home-panel p{color:#6c7086;font-size:15px;margin-bottom:24px}
+.stat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:24px 0}
+.stat-card{background:#fff;border:1px solid #e9ecef;border-radius:8px;padding:16px;text-align:center}
+.stat-number{font-size:32px;font-weight:700;color:#6d28d9}
+.stat-label{font-size:13px;color:#6c7086;margin-top:4px}
+#page-content{max-width:900px;margin:0 auto;width:100%}
+h1{font-size:24px;font-weight:600;margin-bottom:16px;color:#1e1e2e}
+h2{font-size:18px;font-weight:600;margin:24px 0 12px;color:#1e1e2e}
+h3{font-size:15px;font-weight:600;margin:16px 0 8px}
+p{margin-bottom:12px;line-height:1.7;font-size:15px}
+code{background:#f1f3f5;padding:2px 6px;border-radius:4px;font-size:13px;
+     font-family:"SF Mono",Monaco,monospace}
+pre{background:#1e1e2e;color:#cdd6f4;padding:16px;border-radius:8px;
+    overflow-x:auto;margin:16px 0}
+pre code{background:none;padding:0;color:inherit;font-size:13px}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:14px}
+th{background:#f1f3f5;padding:8px 12px;text-align:left;border:1px solid #dee2e6;font-weight:600}
+td{padding:8px 12px;border:1px solid #dee2e6}
+blockquote{border-left:4px solid #cba6f7;padding:8px 16px;
+           background:#f5f3ff;margin:16px 0;color:#4c1d95;border-radius:0 6px 6px 0}
+a{color:#6d28d9;text-decoration:none}a:hover{text-decoration:underline}
+.mermaid{background:#1e1e2e;padding:20px;border-radius:8px;
+         border:1px solid #313244;margin:16px 0;overflow-x:auto;
+         width:100%;min-height:80px}
+.mermaid-wrap{position:relative;display:inline-block;width:100%}
+.mermaid-expand-btn{position:absolute;top:8px;right:8px;background:#6d28d9;color:#fff;
+                     border:none;border-radius:4px;padding:3px 10px;font-size:11px;
+                     cursor:pointer;opacity:0.8;z-index:10}
+.mermaid-expand-btn:hover{opacity:1}
+#mermaid-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);
+               z-index:9999;align-items:center;justify-content:center}
+#mermaid-modal.open{display:flex}
+#mermaid-modal-inner{background:#1e1e2e;border-radius:10px;
+                     width:90vw;height:85vh;position:relative;
+                     overflow:hidden;display:flex;flex-direction:column}
+#mermaid-modal-close{position:absolute;top:8px;right:12px;background:none;
+                     border:none;font-size:18px;cursor:pointer;color:#6c7086;
+                     z-index:10;line-height:1}
+#mermaid-modal-toolbar{position:absolute;top:8px;left:50%;transform:translateX(-50%);
+                        display:flex;gap:6px;z-index:10;
+                        background:rgba(0,0,0,.5);padding:4px 8px;border-radius:20px}
+.pz-btn{background:none;border:1px solid rgba(255,255,255,.3);color:#cdd6f4;
+          border-radius:4px;padding:4px 12px;cursor:pointer;font-size:13px;font-weight:500}
+.pz-btn:hover{background:rgba(255,255,255,.15)}
+#mermaid-modal-content{flex:1;overflow:hidden;cursor:grab;position:relative;
+                        margin-top:40px;user-select:none}
+#mermaid-modal-content.dragging{cursor:grabbing}
+#mermaid-modal-content .mermaid{background:transparent;border:none;
+                                   padding:0;position:absolute;
+                                   transform-origin:0 0}
+.notes-section{margin-top:32px;padding:20px 24px;background:#fffbf0;
+               border:1px solid #fde68a;border-radius:8px}
+.notes-section h2{font-size:16px;color:#92400e;margin-bottom:12px;margin-top:0}
+.notes-section p,.notes-section li{font-size:14px;color:#451a03;line-height:1.7}
+.no-content{color:#6c7086;font-style:italic;padding:40px;text-align:center}
+.search-result{padding:10px 16px;cursor:pointer;border-radius:6px;margin:2px 0}
+.search-result:hover{background:#313244}
+.search-result-name{font-size:13px;color:#cdd6f4}
+.search-result-desc{font-size:11px;color:#6c7086;margin-top:2px;
+                     white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.item-type{font-size:10px;color:#6c7086;text-transform:uppercase;letter-spacing:.5px;margin-left:6px}
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+  <div id="sidebar-header">
+    <h1 id="site-title"></h1>
+    <input id="search-box" type="search" placeholder="Search targets and functions...">
+  </div>
+  <div id="nav-home" onclick="goHome()">&#8962; Home</div>
+  <div id="nav-tabs">
+    <button class="nav-tab active" onclick="showTab('targets')">Targets</button>
+    <button class="nav-tab"        onclick="showTab('functions')">Functions</button>
+  </div>
+  <div id="nav-list"></div>
+</div>
+
+<div id="main">
+  <div id="content-area">
+    <div id="home-panel">
+      <h1 id="home-title"></h1>
+      <p>Generated by <a href="https://github.com/byrnecolm/tardoc" target="_blank">tardoc</a></p>
+      <div class="stat-grid">
+        <div class="stat-card">
+          <div class="stat-number" id="stat-targets">-</div>
+          <div class="stat-label">Targets</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number" id="stat-functions">-</div>
+          <div class="stat-label">Functions</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number" id="stat-status">-</div>
+          <div class="stat-label">Up-to-date</div>
+        </div>
+      </div>
+      <h2>Pipeline overview</h2>
+      <div class="mermaid-wrap">
+        <div id="overall-mermaid" class="mermaid"></div>
+        <button class="mermaid-expand-btn" id="overview-expand-btn"
+                onclick="expandMermaid(document.getElementById('overall-mermaid').getAttribute('data-src'))">
+          &#x26F6; Expand
+        </button>
+      </div>
+    </div>
+    <div id="page-content" style="display:none"></div>
+  </div>
+</div>
+
+<!-- Mermaid fullscreen modal -->
+<div id="mermaid-modal" onclick="if(event.target===this)closeMermaid()">
+  <div id="mermaid-modal-inner">
+    <button id="mermaid-modal-close" onclick="closeMermaid()">&#10005;</button>
+    <div id="mermaid-modal-toolbar">
+      <button class="pz-btn" onclick="pzZoom(-0.2)">&#8722;</button>
+      <button class="pz-btn" onclick="pzFit()">&#x2922; Fit</button>
+      <button class="pz-btn" onclick="pzZoom(0.2)">&#43;</button>
+    </div>
+    <div id="mermaid-modal-content">
+      <div id="mermaid-modal-diagram" class="mermaid"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const PAGES    = {{PAGES_JSON}};
+const INDEX    = {{INDEX_JSON}};
+const PKG_NAME = {{PKG_NAME_JSON}};
+
+const PAGE_MAP = {};
+PAGES.forEach(p => { PAGE_MAP[p.type + ':' + p.name] = p; });
+
+mermaid.initialize({startOnLoad: false, theme: 'default',
+  themeVariables: {fontSize: '14px'}});
+
+document.getElementById('site-title').textContent = PKG_NAME;
+document.getElementById('home-title').textContent = PKG_NAME;
+
+const targets   = INDEX.targets   || [];
+const functions = INDEX.functions || [];
+document.getElementById('stat-targets').textContent   = targets.length;
+document.getElementById('stat-functions').textContent = functions.length;
+document.getElementById('stat-status').textContent    =
+  targets.filter(t => t.status === 'uptodate').length;
+
+// Build overall pipeline mermaid
+const allEdges = new Set();
+targets.forEach(t => {
+  (t.upstream   || []).forEach(u => allEdges.add(u + ' --> ' + t.name));
+  (t.downstream || []).forEach(d => allEdges.add(t.name + ' --> ' + d));
+});
+const overallEl = document.getElementById('overall-mermaid');
+if (allEdges.size > 0 && allEdges.size < 200) {
+  const src = "%%{init:{'theme':'dark','themeVariables':{'lineColor':'#a6adc8','edgeLabelBackground':'#1e1e2e'}}}%%\ngraph LR\n    " +
+              [...allEdges].join('\n    ');
+  overallEl.textContent = src;
+  overallEl.setAttribute('data-src', src);
+  mermaid.run({nodes: [overallEl]});
+} else {
+  document.getElementById('overview-expand-btn').style.display = 'none';
+  if (allEdges.size >= 200) {
+    overallEl.innerHTML = '<p style="color:#6c7086;font-style:italic">Pipeline too large to render inline.</p>';
+  }
+}
+
+let currentTab = 'targets';
+let currentKey = null;
+
+function showTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.nav-tab').forEach((el, i) => {
+    el.classList.toggle('active', (i === 0 && tab === 'targets') ||
+                                   (i === 1 && tab === 'functions'));
+  });
+  renderNavList(null, tab);
+}
+
+function renderNavList(filter, tab) {
+  const list  = document.getElementById('nav-list');
+  list.innerHTML = '';
+  const items = tab === 'targets' ? targets : functions;
+  const shown = filter
+    ? items.filter(i =>
+        i.name.toLowerCase().includes(filter.toLowerCase()) ||
+        (i.description || '').toLowerCase().includes(filter.toLowerCase()))
+    : items;
+
+  if (shown.length === 0) {
+    list.innerHTML = '<div class="no-content">No results</div>';
+    return;
+  }
+  shown.forEach(item => {
+    const div = document.createElement('div');
+    div.className = 'nav-item' +
+      (currentKey === tab + ':' + item.name ? ' active' : '');
+    if (tab === 'targets') {
+      const cls = item.status === 'uptodate'  ? 'badge-ok'  :
+                  item.status === 'errored'    ? 'badge-err' : 'badge-na';
+      div.innerHTML = item.name +
+        '<span class="badge ' + cls + '">' + (item.status || '?') + '</span>';
+    } else {
+      div.textContent = item.name;
+    }
+    div.onclick = () => loadPage(tab, item.name);
+    list.appendChild(div);
+  });
+}
+
+function loadPage(type, name) {
+  const key  = type + ':' + name;
+  const page = PAGE_MAP[key];
+  currentKey = key;
+  renderNavList(document.getElementById('search-box').value, currentTab);
+
+  document.getElementById('home-panel').style.display   = 'none';
+  document.getElementById('page-content').style.display = '';
+
+  const contentEl = document.getElementById('page-content');
+  contentEl.innerHTML = page
+    ? marked.parse(page.content)
+    : '<div class="no-content">No content found.</div>';
+
+  // Render mermaid diagrams, then inject expand buttons after a short delay
+  mermaid.run({nodes: contentEl.querySelectorAll('.language-mermaid')});
+  setTimeout(() => {
+    contentEl.querySelectorAll('.mermaid').forEach(el => {
+      if (el.closest('#mermaid-modal') || el.closest('.mermaid-wrap')) return;
+      const src = el.getAttribute('data-src') || el.textContent || '';
+      el.setAttribute('data-src', src);
+      const wrap = document.createElement('div');
+      wrap.className = 'mermaid-wrap';
+      const btn = document.createElement('button');
+      btn.className = 'mermaid-expand-btn';
+      btn.textContent = '\u26F6 Expand';
+      btn.onclick = () => expandMermaid(src);
+      el.parentNode.insertBefore(wrap, el);
+      wrap.appendChild(el);
+      wrap.appendChild(btn);
+    });
+  }, 400);
+
+  // Intercept .md links — route through loadPage
+  contentEl.querySelectorAll('a').forEach(a => {
+    const href = a.getAttribute('href') || '';
+    if (!href.endsWith('.md')) return;
+    const segs   = href.split('/');
+    const folder = segs[segs.length - 2];
+    const lname  = segs[segs.length - 1].slice(0, -3);
+    if (folder === 'targets' || folder === 'functions') {
+      a.addEventListener('click', e => {
+        e.preventDefault();
+        showTab(folder);
+        loadPage(folder, lname);
+      });
+    }
+  });
+
+  // Inline notes — strip stub comments, show user content if any
+  const notes = page ? (page.notes || '').trim() : '';
+  const stripped = notes.replace(/<!--[^]*?-->/g, '').trim();
+  if (stripped.length > 0) {
+    const notesDiv = document.createElement('div');
+    notesDiv.className = 'notes-section';
+    notesDiv.innerHTML = '<h2>&#128221; Notes</h2>' + marked.parse(stripped);
+    contentEl.appendChild(notesDiv);
+  }
+
+  window.scrollTo(0, 0);
+  contentEl.parentElement.scrollTo(0, 0);
+}
+
+function goHome() {
+  document.getElementById('home-panel').style.display   = '';
+  document.getElementById('page-content').style.display = 'none';
+  currentKey = null;
+  renderNavList(null, currentTab);
+}
+
+// Pan/zoom state
+let pzScale = 1, pzTx = 0, pzTy = 0, pzPanning = false, pzX0 = 0, pzY0 = 0;
+
+function pzApply() {
+  const el = document.getElementById('mermaid-modal-diagram');
+  if (el) el.style.transform = `translate(${pzTx}px,${pzTy}px) scale(${pzScale})`;
+}
+
+function pzFit() {
+  const el  = document.getElementById('mermaid-modal-diagram');
+  const svg = el && el.querySelector('svg');
+  const vp  = document.getElementById('mermaid-modal-content');
+  if (!svg || !vp) return;
+  const sw = svg.getBoundingClientRect().width  / pzScale;
+  const sh = svg.getBoundingClientRect().height / pzScale;
+  const vw = vp.clientWidth  - 40;
+  const vh = vp.clientHeight - 40;
+  pzScale = Math.min(vw / sw, vh / sh, 2);
+  pzTx = (vp.clientWidth  - sw * pzScale) / 2;
+  pzTy = (vp.clientHeight - sh * pzScale) / 2;
+  pzApply();
+}
+
+function pzZoom(delta) {
+  const vp = document.getElementById('mermaid-modal-content');
+  const cx = vp ? vp.clientWidth  / 2 : 0;
+  const cy = vp ? vp.clientHeight / 2 : 0;
+  const newScale = Math.max(0.2, Math.min(8, pzScale + delta));
+  const factor   = newScale / pzScale;
+  pzTx = cx - (cx - pzTx) * factor;
+  pzTy = cy - (cy - pzTy) * factor;
+  pzScale = newScale;
+  pzApply();
+}
+
+function expandMermaid(src) {
+  pzScale = 1; pzTx = 0; pzTy = 0;
+  const diag = document.getElementById('mermaid-modal-diagram');
+  diag.removeAttribute('data-processed');
+  diag.textContent = src;
+  document.getElementById('mermaid-modal').classList.add('open');
+  mermaid.run({nodes: [diag]});
+  setTimeout(pzFit, 300);
+}
+
+function closeMermaid() {
+  document.getElementById('mermaid-modal').classList.remove('open');
+}
+
+// Pan events on modal content
+(function() {
+  const vp = document.getElementById('mermaid-modal-content');
+  if (!vp) return;
+  vp.addEventListener('mousedown', e => {
+    if (e.button !== 0) return;
+    pzPanning = true; pzX0 = e.clientX - pzTx; pzY0 = e.clientY - pzTy;
+    vp.classList.add('dragging');
+  });
+  window.addEventListener('mousemove', e => {
+    if (!pzPanning) return;
+    pzTx = e.clientX - pzX0; pzTy = e.clientY - pzY0;
+    pzApply();
+  });
+  window.addEventListener('mouseup', () => {
+    pzPanning = false;
+    document.getElementById('mermaid-modal-content')?.classList.remove('dragging');
+  });
+  vp.addEventListener('wheel', e => {
+    e.preventDefault();
+    const rect = vp.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    const delta = e.deltaY < 0 ? 0.15 : -0.15;
+    const newScale = Math.max(0.2, Math.min(8, pzScale + delta));
+    const factor   = newScale / pzScale;
+    pzTx = mx - (mx - pzTx) * factor;
+    pzTy = my - (my - pzTy) * factor;
+    pzScale = newScale;
+    pzApply();
+  }, {passive: false});
+})();
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeMermaid(); });
+
+// Fuse.js search
+const fuse = new Fuse([...targets, ...functions], {
+  keys: ['name', 'description', 'command'],
+  threshold: 0.35,
+  includeScore: true
+});
+
+document.getElementById('search-box').addEventListener('input', function() {
+  const q = this.value.trim();
+  if (!q) { renderNavList(null, currentTab); return; }
+  const results = fuse.search(q).slice(0, 30);
+  const list = document.getElementById('nav-list');
+  list.innerHTML = '';
+  if (results.length === 0) {
+    list.innerHTML = '<div class="no-content">No results</div>';
+    return;
+  }
+  results.forEach(r => {
+    const item = r.item;
+    const div  = document.createElement('div');
+    div.className = 'search-result' +
+      (currentKey === item.type + ':' + item.name ? ' active' : '');
+    div.innerHTML =
+      '<div class="search-result-name">' + item.name +
+      '<span class="item-type">' + item.type + '</span></div>' +
+      '<div class="search-result-desc">' + (item.description || '') + '</div>';
+    div.onclick = () => loadPage(item.type, item.name);
+    list.appendChild(div);
+  });
+});
+
+renderNavList(null, 'targets');
+</script>
+</body>
+</html>

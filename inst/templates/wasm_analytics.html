@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{PKG_NAME}} &mdash; Analytics</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+     background:#f8f9fa;color:#212529;height:100vh;display:flex;flex-direction:column;overflow:hidden}
+#hdr{background:#1e1e2e;color:#cdd6f4;padding:10px 20px;display:flex;align-items:center;
+     gap:10px;flex-shrink:0;border-bottom:1px solid #313244}
+#hdr h1{font-size:14px;font-weight:600;color:#cba6f7}
+.chip{font-size:10px;color:#6c7086;background:#313244;padding:2px 8px;border-radius:4px}
+#badge{margin-left:auto;font-size:11px;padding:3px 10px;border-radius:4px;
+       background:#78350f;color:#fef3c7;transition:all .2s}
+#badge.ok{background:#1c7a40;color:#d1fae5}
+#snapshot-note{background:#fef3c7;border-bottom:1px solid #fbbf24;padding:6px 20px;
+               font-size:11px;color:#92400e;flex-shrink:0;display:flex;
+               align-items:center;gap:8px}
+#body{display:flex;flex:1;overflow:hidden}
+#sb{width:220px;min-width:220px;background:#1e1e2e;overflow-y:auto;padding:8px;
+    border-right:1px solid #313244}
+.sbs{font-size:10px;text-transform:uppercase;letter-spacing:.7px;color:#585b70;
+     padding:10px 6px 4px;margin-top:6px}
+.sbs:first-child{margin-top:0}
+.qb{display:block;width:100%;text-align:left;padding:6px 8px;background:none;
+    border:none;border-radius:4px;color:#cdd6f4;font-size:12px;cursor:pointer}
+.qb:hover{background:#313244;color:#cba6f7}
+.qb .ic{margin-right:5px}
+.sbi{width:100%;padding:6px 8px;border:1px solid #313244;border-radius:4px;
+     background:#313244;color:#cdd6f4;font-size:11px;outline:none;margin:2px 0}
+.sbi::placeholder{color:#585b70}
+.sba{width:100%;padding:6px;border:none;border-radius:4px;font-size:11px;
+     cursor:pointer;margin-top:3px;font-weight:500}
+.sba.p{background:#6d28d9;color:#fff}
+.sba.o{background:#313244;color:#a6e3a1;border:1px solid #40a02b}
+#main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+#tabs{display:flex;background:#fff;border-bottom:1px solid #e9ecef;padding:0 16px;flex-shrink:0}
+.tab{padding:10px 16px;border:none;background:none;font-size:13px;cursor:pointer;
+     color:#6c7086;border-bottom:2px solid transparent;font-weight:500}
+.tab.active{color:#6d28d9;border-bottom-color:#6d28d9}
+.panel{display:none;flex-direction:column;flex:1;overflow:hidden}
+.panel.active{display:flex}
+#ew{padding:12px 16px;background:#fff;border-bottom:1px solid #e9ecef;flex-shrink:0}
+.mr{display:flex;gap:4px;margin-bottom:6px}
+.mb.active{background:#6d28d9;color:#fff;border-color:#6d28d9}
+#sql-ed{width:100%;height:68px;padding:8px;border:1px solid #dee2e6;border-radius:5px;
+        font-family:"SF Mono",Monaco,monospace;font-size:12px;resize:vertical;outline:none}
+#sql-ed:focus{border-color:#6d28d9}
+.rr{display:flex;align-items:center;gap:10px;margin-top:6px}
+#run-btn{padding:6px 16px;background:#6d28d9;color:#fff;border:none;border-radius:5px;
+         font-size:12px;cursor:pointer;font-weight:500}
+#run-btn:disabled{background:#9ca3af;cursor:not-allowed}
+#qt{font-size:11px;color:#6c7086}
+#res{flex:1;overflow:auto;padding:12px 16px}
+#rmeta{font-size:11px;color:#6c7086;margin-bottom:6px}
+#git-panel{flex:1;overflow:auto;padding:12px 16px}
+#calls-panel{flex:1;overflow:auto;padding:12px 16px}
+table{border-collapse:collapse;width:100%;font-size:12px}
+th{background:#f1f3f5;padding:6px 10px;text-align:left;
+   border:1px solid #dee2e6;font-weight:600;white-space:nowrap}
+td{padding:5px 10px;border:1px solid #dee2e6;max-width:340px;
+   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+tr:hover td{background:#f8f9fa}
+.badge{display:inline-block;padding:1px 7px;border-radius:10px;font-size:10px;font-weight:600}
+.ok{background:#d1fae5;color:#065f46}.err{background:#fee2e2;color:#991b1b}
+.na{background:#f3f4f6;color:#6b7280}
+.ebox{background:#fee2e2;border:1px solid #fca5a5;border-radius:5px;padding:10px;
+      font-size:12px;color:#991b1b;font-family:monospace;white-space:pre-wrap}
+.loading{color:#9ca3af;font-style:italic;padding:20px;text-align:center;font-size:13px}
+.empty-note{color:#9ca3af;padding:32px;text-align:center;font-size:13px}
+code{background:#f1f3f5;padding:1px 5px;border-radius:3px;font-size:11px;font-family:monospace}
+</style>
+</head>
+<body>
+
+<!-- Embedded pipeline data — written at document_targets() time -->
+<script>const TARDOC = {{ANALYTICS_DATA}};</script>
+
+<div id="hdr">
+  <h1>&#128202; {{PKG_NAME}}</h1>
+  <span class="chip">DuckDB WASM</span>
+  <span class="chip">Snapshot</span>
+  <span id="badge">Loading&hellip;</span>
+</div>
+<div id="snapshot-note">
+  &#128247; This is a static snapshot generated at build time.
+  For live querying and chat run <code>tardoc::view_tardoc_db()</code>.
+</div>
+<div id="body">
+  <div id="sb">
+    <div class="sbs">Search</div>
+    <input id="fts-i" class="sbi" type="search" placeholder="Full-text search&hellip;">
+    <button class="sba p" onclick="runFts()">BM25 Search</button>
+
+    <div class="sbs">Quick queries</div>
+    <button class="qb" onclick="runQ(Q.status)"><span class="ic">&#128202;</span>Status summary</button>
+    <button class="qb" onclick="runQ(Q.errored)"><span class="ic">&#10060;</span>Errored targets</button>
+    <button class="qb" onclick="runQ(Q.connected)"><span class="ic">&#128279;</span>Most connected</button>
+    <button class="qb" onclick="runQ(Q.nodesc)"><span class="ic">&#128196;</span>Missing descriptions</button>
+    <button class="qb" onclick="runQ(Q.fnusage)"><span class="ic">&#128736;</span>Function usage</button>
+    <button class="qb" onclick="runQ(Q.all_t)"><span class="ic">&#127919;</span>All targets</button>
+    <button class="qb" onclick="runQ(Q.all_f)"><span class="ic">&#128296;</span>All functions</button>
+
+    <div id="ci-queries" style="display:none">
+      <div class="sbs">Code intelligence</div>
+      <button class="qb" onclick="runQ(Q.fn_complexity)"><span class="ic">&#128208;</span>Function complexity</button>
+      <button class="qb" onclick="runQ(Q.fn_callers)"><span class="ic">&#128279;</span>Who calls what</button>
+      <button class="qb" onclick="runQ(Q.undocumented_calls)"><span class="ic">&#128683;</span>Undocumented calls</button>
+    </div>
+
+    <div class="sbs">Lineage</div>
+    <input id="lin-i" class="sbi" type="text" placeholder="Target name&hellip;">
+    <button class="sba p"  onclick="runUp()">&#8593; Upstream</button>
+    <button class="sba o"  onclick="runDown()">&#8595; Downstream</button>
+
+    <div class="sbs">Tables</div>
+    <div style="padding:0 4px;font-size:10px;color:#585b70;line-height:1.8">
+      <code>targets</code>&nbsp;<code>functions</code>&nbsp;<code>edges</code>
+      <span id="ci-tables" style="display:none"><br><code>function_calls</code></span>
+      <span id="git-tables" style="display:none"><br><code>git_history</code></span>
+    </div>
+  </div>
+
+  <div id="main">
+    <div id="tabs">
+      <button class="tab active" onclick="showTab('sql')">SQL / dplyr</button>
+      <button class="tab" id="git-tab" style="display:none" onclick="showTab('git')">&#128214; Git history</button>
+      <button class="tab" id="calls-tab" style="display:none" onclick="showTab('calls')">&#128200; Call graph</button>
+    </div>
+
+    <!-- SQL panel -->
+    <div id="sql-panel" class="panel active">
+      <div id="ew">
+        <textarea id="sql-ed" spellcheck="false"
+          placeholder="SELECT * FROM targets LIMIT 10;&#10;-- dplyr syntax also works if extension loaded&#10;-- Ctrl+Enter to run"></textarea>
+        <div class="rr">
+          <button id="run-btn" onclick="runCustom()" disabled>&#9654; Run</button>
+          <span id="qt"></span>
+          <span style="font-size:11px;color:#9ca3af;margin-left:auto">Ctrl+Enter</span>
+        </div>
+      </div>
+      <div id="res">
+        <div class="loading" id="init-msg">Loading DuckDB WASM&hellip;</div>
+        <div id="rmeta"></div>
+        <div id="rtable"></div>
+      </div>
+    </div>
+
+    <!-- Git history panel -->
+    <div id="git-panel" class="panel">
+      <div id="git-content" class="empty-note">Git history not available for this snapshot.</div>
+    </div>
+
+    <!-- Call graph panel -->
+    <div id="calls-panel" class="panel">
+      <div id="calls-content" class="empty-note">Function call graph not available for this snapshot.</div>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+const PKG_NAME  = {{PKG_NAME_JSON}};
+const HAS_CI    = !!(TARDOC.function_calls && TARDOC.function_calls.length > 0);
+const HAS_GIT   = !!(TARDOC.git_history   && TARDOC.git_history.length   > 0);
+
+let conn = null;
+
+async function init() {
+  const badge   = document.getElementById('badge');
+  const initMsg = document.getElementById('init-msg');
+
+  try {
+    initMsg.textContent = 'Loading DuckDB WASM from CDN&hellip;';
+    const duckdb = await import('https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@latest/+esm');
+    const bundle = await duckdb.selectBundle(duckdb.getJsDelivrBundles());
+    const worker = new Worker(URL.createObjectURL(
+      new Blob([`importScripts("${bundle.mainWorker}");`], {type:'text/javascript'})
+    ));
+    const db = new duckdb.AsyncDuckDB(new duckdb.ConsoleLogger(duckdb.LogLevel.WARNING), worker);
+    await db.instantiate(bundle.mainModule, bundle.pthreadWorker);
+    conn = await db.connect();
+
+    // Register embedded data as virtual files
+    initMsg.textContent = 'Loading pipeline data&hellip;';
+    const tables = [
+      ['t', TARDOC.targets],
+      ['f', TARDOC.functions],
+      ['e', TARDOC.edges]
+    ];
+    if (HAS_CI)  tables.push(['ci', TARDOC.function_calls]);
+    if (HAS_GIT) tables.push(['gh', TARDOC.git_history]);
+
+    for (const [key, data] of tables) {
+      await db.registerFileText(key + '.json', JSON.stringify(data));
+    }
+
+    initMsg.textContent = 'Building tables&hellip;';
+    await conn.query("CREATE TABLE targets   AS SELECT * FROM read_json('t.json')");
+    await conn.query("CREATE TABLE functions AS SELECT * FROM read_json('f.json')");
+    await conn.query("CREATE TABLE edges     AS SELECT * FROM read_json('e.json')");
+    if (HAS_CI)  await conn.query("CREATE TABLE function_calls AS SELECT * FROM read_json('ci.json')");
+    if (HAS_GIT) await conn.query("CREATE TABLE git_history    AS SELECT * FROM read_json('gh.json')");
+
+    // FTS
+    try {
+      await conn.query("INSTALL fts; LOAD fts;");
+      await conn.query("PRAGMA create_fts_index('targets','name','name','description','command')");
+      await conn.query("PRAGMA create_fts_index('functions','name','name','description')");
+    } catch(e) { console.warn('FTS', e); }
+
+    // dplyr
+    try { await conn.query("INSTALL dplyr FROM community; LOAD dplyr;"); } catch {}
+
+    // Show optional UI
+    if (HAS_CI) {
+      document.getElementById('ci-queries').style.display = '';
+      document.getElementById('ci-tables').style.display = '';
+      document.getElementById('calls-tab').style.display = '';
+      renderCallGraph();
+    }
+    if (HAS_GIT) {
+      document.getElementById('git-tables').style.display = '';
+      document.getElementById('git-tab').style.display = '';
+      renderGitHistory();
+    }
+
+    badge.textContent = 'Ready'; badge.className = 'ok';
+    initMsg.style.display = 'none';
+    document.getElementById('run-btn').disabled = false;
+    runQ(Q.status);
+
+  } catch(e) {
+    initMsg.textContent = 'Error: ' + e.message;
+    badge.textContent = 'Error';
+    console.error(e);
+  }
+}
+
+// ---- Pre-built queries -----------------------------------------------------
+const Q = {
+  status:    `SELECT status,COUNT(*) n,ROUND(COUNT(*)*100.0/SUM(COUNT(*)) OVER(),1) pct FROM targets GROUP BY status ORDER BY n DESC`,
+  errored:   `SELECT name,status,last_built,command FROM targets WHERE status='errored' ORDER BY name`,
+  connected: `SELECT name,description,status,n_upstream,n_downstream,n_upstream+n_downstream total FROM targets ORDER BY total DESC LIMIT 20`,
+  nodesc:    `SELECT name,command,status FROM targets WHERE description='' ORDER BY name`,
+  fnusage:   `SELECT e.from_target fn,COUNT(*) uses,STRING_AGG(e.to_target,', ') targets FROM edges e JOIN functions f ON f.name=e.from_target GROUP BY e.from_target ORDER BY uses DESC`,
+  all_t:     `SELECT name,description,status,last_built,n_upstream,n_downstream FROM targets ORDER BY name`,
+  all_f:     `SELECT name,description,source_file FROM functions ORDER BY name`,
+  fn_complexity: `SELECT caller, COUNT(DISTINCT callee) AS calls_out, COUNT(*) AS total_calls FROM function_calls GROUP BY caller ORDER BY calls_out DESC LIMIT 30`,
+  fn_callers: `SELECT callee, COUNT(DISTINCT caller) AS called_by FROM function_calls GROUP BY callee ORDER BY called_by DESC LIMIT 30`,
+  undocumented_calls: `SELECT DISTINCT fc.callee AS undocumented_function, fc.caller, fc.file FROM function_calls fc LEFT JOIN functions f ON f.name = fc.callee WHERE f.name IS NULL ORDER BY fc.callee`
+};
+
+const runQ = s => { document.getElementById('sql-ed').value=s.trim(); exec(s); };
+const runCustom = () => { const s=document.getElementById('sql-ed').value.trim(); if(s) exec(s); };
+
+async function runFts() {
+  const q=document.getElementById('fts-i').value.trim(); if(!q) return;
+  const e=q.replace(/'/g,"\'");
+  runQ(`SELECT * FROM (SELECT 'target' AS type,name,description,status,fts_main_targets.match_bm25(name,'${e}') AS score FROM targets UNION ALL SELECT 'function' AS type,name,description,'' AS status,fts_main_functions.match_bm25(name,'${e}') AS score FROM functions) t WHERE score IS NOT NULL ORDER BY score DESC`);
+}
+
+function runUp() {
+  const t=document.getElementById('lin-i').value.trim(); if(!t) return;
+  runQ(`WITH RECURSIVE up AS (SELECT from_target name,1 depth FROM edges WHERE to_target='${t}' UNION ALL SELECT e.from_target,u.depth+1 FROM edges e JOIN up u ON e.to_target=u.name WHERE u.depth<20) SELECT DISTINCT name,depth FROM up ORDER BY depth,name`);
+}
+function runDown() {
+  const t=document.getElementById('lin-i').value.trim(); if(!t) return;
+  runQ(`WITH RECURSIVE dn AS (SELECT to_target name,1 depth FROM edges WHERE from_target='${t}' UNION ALL SELECT e.to_target,d.depth+1 FROM edges e JOIN dn d ON e.from_target=d.name WHERE d.depth<20) SELECT DISTINCT name,depth FROM dn ORDER BY depth,name`);
+}
+
+async function exec(sql) {
+  if(!conn) return;
+  document.getElementById('rmeta').textContent='';
+  document.getElementById('rtable').innerHTML='<div class="loading">Running&hellip;</div>';
+  const t0=performance.now();
+  try {
+    const r=await conn.query(sql), ms=(performance.now()-t0).toFixed(0);
+    const rows=r.toArray().map(x=>Object.fromEntries(r.schema.fields.map(f=>[f.name,x[f.name]])));
+    const cols=r.schema.fields.map(f=>f.name);
+    document.getElementById('rmeta').textContent=`${rows.length} rows · ${ms}ms`;
+    document.getElementById('qt').textContent=ms+'ms';
+    document.getElementById('rtable').innerHTML = rows.length ? tbl(cols,rows) :
+      '<p style="color:#9ca3af;padding:12px">No rows.</p>';
+  } catch(e) {
+    document.getElementById('rtable').innerHTML=`<div class="ebox">${e.message}</div>`;
+  }
+}
+
+function tbl(cols,rows,max=500) {
+  let h='<div style="overflow-x:auto"><table><thead><tr>'+cols.map(c=>`<th>${c}</th>`).join('')+'</tr></thead><tbody>';
+  rows.slice(0,max).forEach(r=>{
+    h+='<tr>'+cols.map(c=>{
+      const v=r[c]==null?'':String(r[c]);
+      if(c==='status'){ const cl=v==='uptodate'?'ok':v==='errored'?'err':'na'; return `<td><span class="badge ${cl}">${v}</span></td>`; }
+      return `<td title="${v.replace(/"/g,'&quot;')}">${v}</td>`;
+    }).join('')+'</tr>';
+  });
+  if(rows.length>max) h+=`<tr><td colspan="${cols.length}" style="color:#9ca3af;text-align:center;padding:6px">&hellip;${rows.length-max} more</td></tr>`;
+  return h+'</tbody></table></div>';
+}
+
+async function renderGitHistory() {
+  const el = document.getElementById('git-content');
+  try {
+    const r = await conn.query("SELECT file, author, date, message FROM git_history ORDER BY date DESC LIMIT 200");
+    const rows = r.toArray().map(x=>Object.fromEntries(r.schema.fields.map(f=>[f.name,x[f.name]])));
+    el.innerHTML = rows.length ? tbl(['file','author','date','message'], rows) :
+      '<div class="empty-note">No git history found.</div>';
+  } catch(e) { el.innerHTML=`<div class="ebox">${e.message}</div>`; }
+}
+
+async function renderCallGraph() {
+  const el = document.getElementById('calls-content');
+  try {
+    const r = await conn.query("SELECT caller, callee, COUNT(*) n FROM function_calls GROUP BY caller, callee ORDER BY caller, n DESC");
+    const rows = r.toArray().map(x=>Object.fromEntries(r.schema.fields.map(f=>[f.name,x[f.name]])));
+    el.innerHTML = rows.length ? tbl(['caller','callee','n'], rows) :
+      '<div class="empty-note">No function calls recorded.</div>';
+  } catch(e) { el.innerHTML=`<div class="ebox">${e.message}</div>`; }
+}
+
+let activeTab = 'sql';
+function showTab(t) {
+  activeTab = t;
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
+  document.getElementById(t+'-panel').classList.add('active');
+  const tabs = ['sql','git','calls'];
+  const idx  = tabs.indexOf(t);
+  document.querySelectorAll('.tab')[idx]?.classList.add('active');
+}
+
+let eMode='sql';
+
+document.getElementById('sql-ed').addEventListener('keydown', e => {
+  if ((e.ctrlKey||e.metaKey) && e.key==='Enter') runCustom();
+});
+document.getElementById('fts-i').addEventListener('keydown', e => { if(e.key==='Enter') runFts(); });
+document.getElementById('lin-i').addEventListener('keydown', e => { if(e.key==='Enter') runUp(); });
+
+Object.assign(window, {showTab,  runQ, runFts, runCustom, runUp, runDown, Q});
+init();
+</script>
+</body>
+</html>
