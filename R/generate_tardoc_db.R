@@ -94,8 +94,9 @@ generate_tardoc_db <- function(targets_data, function_names, cfg,
 
   # ---- 4. FAISS (semantic index) -------------------------------------------
   has_faiss <- FALSE
-  faiss_error <- if (isTRUE(db_extensions) && !has_embeddings)
-    "requires embeddings" else NA_character_
+  faiss_error <- if (!isTRUE(db_extensions)) "db_extensions = FALSE"
+                 else if (!has_embeddings) "requires embeddings"
+                 else NA_character_
   if (isTRUE(db_extensions) && has_embeddings) {
     tryCatch({
       message("  Installing faiss (HNSW32 index)...")
@@ -199,7 +200,11 @@ generate_tardoc_db <- function(targets_data, function_names, cfg,
       stringsAsFactors = FALSE
     )
   })
-  DBI::dbWriteTable(con, "targets", do.call(rbind, target_rows), overwrite = TRUE)
+  # do.call(rbind, list()) is NULL, which dbWriteTable cannot write. A pipeline
+  # with no targets, or with no documented functions, must still produce the
+  # tables the viewer queries -- empty, not absent.
+  DBI::dbWriteTable(con, "targets",
+                    .rows_or_empty(target_rows, .targets_proto), overwrite = TRUE)
 
   r_files <- list.files(cfg$r_scripts_dir, pattern = "\\.R$", full.names = TRUE)
   func_rows <- lapply(function_names, function(fn) {
@@ -211,7 +216,8 @@ generate_tardoc_db <- function(targets_data, function_names, cfg,
                notes = read_note(fn, "functions", cfg),
                stringsAsFactors = FALSE)
   })
-  DBI::dbWriteTable(con, "functions", do.call(rbind, func_rows), overwrite = TRUE)
+  DBI::dbWriteTable(con, "functions",
+                    .rows_or_empty(func_rows, .functions_proto), overwrite = TRUE)
 
   edges_df       <- as.data.frame(targets_data$network$edges)
   names(edges_df) <- c("from_target", "to_target")
@@ -282,4 +288,29 @@ generate_tardoc_db <- function(targets_data, function_names, cfg,
 #' @keywords internal
 .faiss_index_path <- function(cfg, idx) {
   file.path(cfg$site_path, paste0(idx, ".faiss"))
+}
+
+# Empty-table schemas, so the viewer's queries resolve even when a pipeline has
+# no targets or no documented functions.
+.targets_proto <- data.frame(
+  name = character(), description = character(), command = character(),
+  status = character(), last_built = character(),
+  n_upstream = integer(), n_downstream = integer(), notes = character(),
+  stringsAsFactors = FALSE
+)
+
+.functions_proto <- data.frame(
+  name = character(), description = character(),
+  source_file = character(), notes = character(),
+  stringsAsFactors = FALSE
+)
+
+#' Bind row data frames, falling back to an empty typed schema
+#'
+#' @param rows  A list of one-row data frames, possibly empty.
+#' @param proto A zero-row data frame giving the column names and types.
+#' @return A data frame; `proto` when `rows` is empty.
+#' @keywords internal
+.rows_or_empty <- function(rows, proto) {
+  if (length(rows) == 0) proto else do.call(rbind, rows)
 }

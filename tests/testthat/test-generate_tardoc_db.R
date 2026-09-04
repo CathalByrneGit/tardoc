@@ -120,3 +120,25 @@ test_that(".faiss_index_path lands beside the database", {
   expect_equal(dirname(p), cfg$site_path)
   expect_equal(basename(p), "target_semantic.faiss")
 })
+
+test_that("a pipeline with no documented functions still builds", {
+  skip_if_no_duckdb()
+  # do.call(rbind, list()) is NULL, which dbWriteTable rejects; the functions
+  # table must exist and be empty rather than blowing up the whole build.
+  db <- local_db()
+  fns <- with_con(db$path, function(con)
+    DBI::dbGetQuery(con, "SELECT * FROM functions"))
+  expect_equal(nrow(fns), 0L)
+  expect_true(all(c("name", "description", "source_file", "notes") %in% names(fns)))
+})
+
+test_that("a pipeline with no targets still builds", {
+  skip_if_no_duckdb()
+  tmp <- withr::local_tempdir(); cfg <- mock_cfg(tmp); setup_site_dirs(cfg)
+  td <- mock_targets_data()
+  td$target_names <- character()
+  path <- generate_tardoc_db(td, character(), cfg)
+  n <- with_con(path, function(con)
+    DBI::dbGetQuery(con, "SELECT COUNT(*) n FROM targets")$n)
+  expect_equal(n, 0)
+})
