@@ -1,16 +1,16 @@
 # R/generate_tardoc_db.R
 #
-# Generates tardoc/tardoc.duckdb — the server-side DuckDB database.
+# Generates tardoc/tardoc.duckdb -- the server-side DuckDB database.
 # Capability layers (each gracefully optional):
 #
 #   1. Always:   targets, functions, edges tables
 #   2. Always:   built-in FTS index
-#   3. Optional: quackformers  → BERT embeddings (384-dim)
-#   4. Optional: faiss         → HNSW32 ANN index on embeddings
-#   5. Optional: sitting_duck  → function_calls table (R AST)
-#   6. Optional: duck_tails    → git_history table
-#   7. Optional: duckdb_mcp    → install extension + write MCP config
-#   8. Always:   _meta table recording which capabilities were built
+#   3. Optional: quackformers  -> BERT embeddings (384-dim)
+#   4. Optional: faiss         -> HNSW32 ANN index on embeddings
+#   5. Optional: sitting_duck  -> function_calls table (R AST)
+#   6. Optional: duck_tails    -> git_history table
+#   7. Optional: duckdb_mcp    -> install extension + write MCP config
+#   8. Always:   _meta (wide flags) + _meta_detail (flags plus skip reason)
 
 #' Generate the tardoc DuckDB analytics database
 #'
@@ -25,8 +25,9 @@
 #' @param db_extensions Logical. When `TRUE`, attempts to install community
 #'   extensions: `quackformers` (BERT embeddings), `faiss` (ANN index),
 #'   `sitting_duck` (R code AST), `duck_tails` (git history), `duckdb_mcp`
-#'   (MCP server config). Each step is wrapped in `tryCatch`; failures are
-#'   skipped silently. Default `FALSE` — core tables and FTS only.
+#'   (MCP server config). Each step is wrapped in `tryCatch`; a failure skips
+#'   that layer and the reason is recorded in the `_meta_detail` table.
+#'   Default `FALSE` -- core tables and FTS only.
 #'
 #' @return Path to `tardoc.duckdb` invisibly, or `NULL` if the `duckdb`
 #'   package is not installed.
@@ -34,7 +35,7 @@
 generate_tardoc_db <- function(targets_data, function_names, cfg,
                                db_extensions = FALSE) {
   if (!requireNamespace("duckdb", quietly = TRUE)) {
-    message("'duckdb' not installed — skipping tardoc.duckdb. ",
+    message("'duckdb' not installed -- skipping tardoc.duckdb. ",
             "Install with: install.packages('duckdb')")
     return(invisible(NULL))
   }
@@ -52,6 +53,7 @@ generate_tardoc_db <- function(targets_data, function_names, cfg,
 
   # ---- 2. FTS (built-in) ---------------------------------------------------
   has_fts <- FALSE
+  fts_error <- NA_character_
   tryCatch({
     tryCatch(
       DBI::dbExecute(con, "LOAD fts;"),  # bundled on most systems
@@ -61,9 +63,12 @@ generate_tardoc_db <- function(targets_data, function_names, cfg,
     DBI::dbExecute(con, "PRAGMA create_fts_index('functions', 'name', 'name', 'description')")
     has_fts <- TRUE
     message("  FTS index built.")
-  }, error = function(e) message("  FTS unavailable: ", conditionMessage(e)))
+  }, error = function(e) {
+    fts_error <<- conditionMessage(e)
+    message("  FTS unavailable: ", conditionMessage(e))
+  })
 
-  # ---- 3–7. Community extensions (opt-in) ---------------------------------
+  # ---- 3-7. Community extensions (opt-in) ---------------------------------
   if (!isTRUE(db_extensions)) {
     message("  Skipping community extensions (db_extensions = FALSE).")
     message("  Re-run with db_extensions = TRUE to add semantic search,")
@@ -72,6 +77,7 @@ generate_tardoc_db <- function(targets_data, function_names, cfg,
 
   # ---- 3. Embeddings (quackformers) ----------------------------------------
   has_embeddings <- FALSE
+  emb_error <- if (!isTRUE(db_extensions)) "db_extensions = FALSE" else NA_character_
   if (isTRUE(db_extensions)) tryCatch({
     message("  Installing quackformers (BERT embeddings)...")
     DBI::dbExecute(con, "INSTALL quackformers FROM community; LOAD quackformers;")
@@ -81,40 +87,77 @@ generate_tardoc_db <- function(targets_data, function_names, cfg,
     DBI::dbExecute(con, "UPDATE functions SET embedding = embed(COALESCE(description,'') || ' ' || name)")
     has_embeddings <- TRUE
     message("  Embeddings generated.")
-  }, error = function(e) message("  quackformers unavailable: ", conditionMessage(e)))
+  }, error = function(e) {
+    emb_error <<- conditionMessage(e)
+    message("  quackformers unavailable: ", conditionMessage(e))
+  })
 
   # ---- 4. FAISS (semantic index) -------------------------------------------
   has_faiss <- FALSE
+  faiss_error <- if (isTRUE(db_extensions) && !has_embeddings)
+    "requires embeddings" else NA_character_
   if (isTRUE(db_extensions) && has_embeddings) {
     tryCatch({
       message("  Installing faiss (HNSW32 index)...")
       DBI::dbExecute(con, "INSTALL faiss FROM community; LOAD faiss;")
-      DBI::dbExecute(con, "CALL FAISS_CREATE('target_semantic',   384, 'IDMap,HNSW32')")
-      DBI::dbExecute(con, "CALL FAISS_CREATE('function_semantic', 384, 'IDMap,HNSW32')")
-      DBI::dbExecute(con, "CALL FAISS_ADD((SELECT rowid, embedding FROM targets   WHERE embedding IS NOT NULL), 'target_semantic')")
-      DBI::dbExecute(con, "CALL FAISS_ADD((SELECT rowid, embedding FROM functions WHERE embedding IS NOT NULL), 'function_semantic')")
+      for (idx in names(.faiss_indexes)) {
+        tbl <- .faiss_indexes[[idx]]
+        DBI::dbExecute(con, sprintf(
+          "CALL FAISS_CREATE('%s', %d, 'IDMap,HNSW32')", idx, .embedding_dim))
+        DBI::dbExecute(con, sprintf(
+          "CALL FAISS_ADD((SELECT rowid, embedding FROM %s WHERE embedding IS NOT NULL), '%s')",
+          tbl, idx))
+        # A FAISS index lives in the extension, not in the .duckdb file. Without
+        # an explicit save it is discarded on disconnect and every later
+        # FAISS_SEARCH fails, so persist it to a sidecar next to the database.
+        DBI::dbExecute(con, sprintf(
+          "CALL FAISS_SAVE('%s', %s)", idx,
+          DBI::dbQuoteString(con, .faiss_index_path(cfg, idx))))
+      }
       has_faiss <- TRUE
-      message("  FAISS index built.")
-    }, error = function(e) message("  faiss unavailable: ", conditionMessage(e)))
+      message("  FAISS indexes built and saved to ", cfg$site_path, ".")
+    }, error = function(e) {
+      faiss_error <<- conditionMessage(e)
+      message("  faiss unavailable: ", conditionMessage(e))
+    })
   }
 
   # ---- 5 & 6. Code intelligence (sitting_duck + duck_tails) ----------------
   ci <- if (isTRUE(db_extensions)) generate_code_intelligence(con, cfg) else
-          list(has_ast = FALSE, has_git = FALSE)
+          list(has_ast = FALSE, has_git = FALSE,
+               ast_error = "db_extensions = FALSE",
+               git_error = "db_extensions = FALSE")
   has_ast <- isTRUE(ci$has_ast)
   has_git <- isTRUE(ci$has_git)
 
   # ---- 7. duckdb_mcp: install + write config --------------------------------
   has_mcp <- FALSE
+  mcp_error <- if (!isTRUE(db_extensions)) "db_extensions = FALSE" else NA_character_
   if (isTRUE(db_extensions)) tryCatch({
     message("  Installing duckdb_mcp...")
     DBI::dbExecute(con, "INSTALL duckdb_mcp FROM community; LOAD duckdb_mcp;")
     .write_mcp_config(cfg, db_path)
     has_mcp <- TRUE
     message("  MCP config written: ", file.path(cfg$site_path, "tardoc_mcp_config.json"))
-  }, error = function(e) message("  duckdb_mcp unavailable: ", conditionMessage(e)))
+  }, error = function(e) {
+    mcp_error <<- conditionMessage(e)
+    message("  duckdb_mcp unavailable: ", conditionMessage(e))
+  })
 
   # ---- 8. Capability metadata ----------------------------------------------
+  # One row per capability, with the reason it is off. Recording the reason
+  # means a FALSE flag is diagnosable instead of just mysterious.
+  meta <- data.frame(
+    capability = c("fts", "embeddings", "faiss", "ast", "git", "mcp"),
+    available  = c(has_fts, has_embeddings, has_faiss, has_ast, has_git, has_mcp),
+    reason     = c(fts_error, emb_error, faiss_error,
+                   ci$ast_error, ci$git_error, mcp_error),
+    stringsAsFactors = FALSE
+  )
+  DBI::dbWriteTable(con, "_meta_detail", meta, overwrite = TRUE)
+
+  # Wide single-row _meta is the shape view_tardoc_db() and the README
+  # document, so it stays exactly as it was; _meta_detail carries the reasons.
   DBI::dbExecute(con, sprintf(
     "CREATE TABLE _meta AS SELECT %s AS has_fts, %s AS has_embeddings,
      %s AS has_faiss, %s AS has_ast, %s AS has_git, %s AS has_mcp",
@@ -220,4 +263,23 @@ generate_tardoc_db <- function(targets_data, function_names, cfg,
     if (in_d) { if (grepl("^##", l)) break; dl <- c(dl, l) }
   }
   trimws(paste(dl, collapse = "\n"))
+}
+
+# Embedding width produced by quackformers' embed(); embed_jina() is 768.
+.embedding_dim <- 384L
+
+# FAISS index name -> source table.
+.faiss_indexes <- list(
+  target_semantic   = "targets",
+  function_semantic = "functions"
+)
+
+#' Path of a persisted FAISS index sidecar
+#'
+#' @param cfg A site config list.
+#' @param idx FAISS index name.
+#' @return Absolute path to the index file.
+#' @keywords internal
+.faiss_index_path <- function(cfg, idx) {
+  file.path(cfg$site_path, paste0(idx, ".faiss"))
 }

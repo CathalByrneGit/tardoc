@@ -25,3 +25,45 @@ test_that(".empty_meta type column is stem for all rows", {
   result <- tardoc:::.empty_meta(c("x", "y"))
   expect_true(all(result$type == "stem"))
 })
+
+test_that("load_targets_data does not write into the global environment", {
+  # withr::with_dir() evaluates its code in the caller's frame, so `<<-` inside
+  # it reached past the function and bound into globalenv, clobbering any user
+  # variable called meta / network / manifest / target_names / has_store.
+  polluters <- c("meta", "network", "manifest", "target_names", "has_store")
+  sentinel  <- "do-not-clobber"
+  for (v in polluters) assign(v, sentinel, envir = globalenv())
+  withr::defer(rm(list = polluters, envir = globalenv()))
+
+  tmp <- withr::local_tempdir(); cfg <- mock_cfg(tmp)
+  td  <- mock_targets_data()
+  local_mocked_bindings(
+    tar_config_set = function(...) invisible(NULL),
+    tar_manifest   = function(...) td$manifest,
+    tar_network    = function(...) td$network,
+    tar_meta       = function(...) td$meta,
+    .package = "targets"
+  )
+  suppressMessages(load_targets_data(cfg))
+
+  for (v in polluters) {
+    expect_identical(get(v, envir = globalenv()), sentinel,
+                     info = paste("globalenv$", v, "was overwritten"))
+  }
+})
+
+test_that("load_targets_data returns the documented fields", {
+  tmp <- withr::local_tempdir(); cfg <- mock_cfg(tmp)
+  td  <- mock_targets_data()
+  local_mocked_bindings(
+    tar_config_set = function(...) invisible(NULL),
+    tar_manifest   = function(...) td$manifest,
+    tar_network    = function(...) td$network,
+    tar_meta       = function(...) td$meta,
+    .package = "targets"
+  )
+  res <- suppressMessages(load_targets_data(cfg))
+  expect_named(res, c("meta", "target_names", "network", "manifest", "has_store"))
+  expect_setequal(res$target_names, td$target_names)
+  expect_false(res$has_store)
+})

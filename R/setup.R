@@ -3,7 +3,7 @@
 #' Build a site config list
 #'
 #' All generated content goes into `site_dir` (default `"tardoc"`) inside the
-#' project root. No renderer is required — output is plain markdown files plus
+#' project root. No renderer is required -- output is plain markdown files plus
 #' a self-contained HTML viewer.
 #'
 #' @param project_path Path to the targets project root. Default `"."`.

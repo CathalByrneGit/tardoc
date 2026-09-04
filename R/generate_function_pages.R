@@ -14,7 +14,7 @@ generate_all_function_pages <- function(cfg) {
   func_names <- character()
 
   for (file in r_files) {
-    # Discover function names via regex — avoids sourcing files that may have
+    # Discover function names via regex -- avoids sourcing files that may have
     # missing package dependencies in the calling environment
     lines     <- readLines(file, warn = FALSE)
     fn_names  <- regmatches(lines,

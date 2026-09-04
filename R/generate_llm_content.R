@@ -4,6 +4,26 @@
 # Called only when document_targets(llm = TRUE).
 
 #' Generate LLM content for undescribed targets and all functions
+#'
+#' Fills in descriptions for targets that have none and adds a plain-language
+#' explanation to each function page. Requires the `ellmer` package.
+#'
+#' @param targets_data   Output of [load_targets_data()].
+#' @param function_names Character vector of function names to explain.
+#' @param cfg            A site config list.
+#' @param llm_chat       An existing `ellmer` Chat object. When supplied,
+#'   `provider`, `model`, `api_key` and `base_url` are ignored.
+#' @param provider       Character. One of `"openai"`, `"anthropic"`,
+#'   `"ollama"`, or `"openai_compatible"`. Default `"openai"`.
+#' @param model          Character. Model name. Defaults to the provider's own
+#'   default when `NULL`.
+#' @param api_key        Character. API key. When `NULL` the provider's
+#'   standard environment variable is used.
+#' @param base_url       Character. Base URL for `"ollama"` and
+#'   `"openai_compatible"` providers.
+#'
+#' @return Invisibly `NULL`; called for its side effect of rewriting the
+#'   generated blocks of the target and function markdown pages.
 #' @export
 generate_llm_content <- function(targets_data, function_names, cfg,
                                   llm_chat = NULL, provider = "openai",

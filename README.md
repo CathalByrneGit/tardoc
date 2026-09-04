@@ -14,7 +14,7 @@ This generates everything. Which tier you _use_ depends on how much you need.
 
 | Tier | How | Server? | Extra packages |
 |---|---|---|---|
-| **1 — Static viewer** | `view_tardoc()` | No — `file://` | None |
+| **1 — Static viewer** | `view_tardoc()` | No — `file://` | None (CDN) |
 | **2 — WASM analytics** | `view_wasm_analytics()` | No — `file://` | None (CDN) |
 | **3 — Server analytics** | `view_tardoc_db()` | Yes | duckdb, callr, httpuv |
 | **4 — LLM chat** | `view_tardoc_db(llm_chat=...)` | Yes | + ellmer |
@@ -32,7 +32,7 @@ tardoc::document_targets(pkg_name = "My pipeline")
 tardoc::view_tardoc()
 ```
 
-Writes `tardoc/viewer.html` — a single self-contained file that opens in any browser with no internet connection, no server, and no dependencies beyond what `document_targets()` already requires.
+Writes `tardoc/viewer.html` — a single self-contained file that opens in any browser with no server and no R dependencies beyond what `document_targets()` already requires. All pipeline content is inlined into the file; the rendering libraries (`marked`, `mermaid`, `fuse.js`) are loaded from jsDelivr at exact pinned versions with subresource integrity, so the page needs network access on first open and will be served from the browser cache afterwards.
 
 **Output structure:**
 
@@ -177,7 +177,17 @@ DBI::dbGetQuery(con, "SELECT * FROM _meta")
 | `duck_tails` | Git history | `INSTALL duck_tails FROM community` |
 | `duckdb_mcp` | MCP server + config | `INSTALL duckdb_mcp FROM community` |
 
-These are installed automatically inside the DuckDB process at build time when the R `duckdb` package is available. Each step is wrapped in `tryCatch` — if an extension is unavailable the build continues and `_meta` records the result.
+These are installed automatically inside the DuckDB process at build time when the R `duckdb` package is available. Each step is wrapped in `tryCatch` — if an extension is unavailable the build continues, `_meta` records the flag, and `_meta_detail` records *why* the layer was skipped:
+
+```r
+DBI::dbGetQuery(con, "SELECT * FROM _meta_detail")
+#   capability  available  reason
+#   fts              TRUE  NA
+#   embeddings      FALSE  Extension "quackformers" not found
+#   faiss           FALSE  requires embeddings
+```
+
+The FAISS index is stored beside the database as `tardoc/*.faiss` rather than inside `tardoc.duckdb` — that is how the extension persists indexes. Keep those files next to the database; `view_tardoc_db()` reloads them on startup and disables semantic search if they are missing.
 
 ---
 

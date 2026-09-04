@@ -3,7 +3,7 @@
 #' Generate an llms.txt file for LLM consumption
 #'
 #' Writes a plain markdown file at the package root that summarises the entire
-#' targets project in a format any LLM can read directly — no HTML parsing or
+#' targets project in a format any LLM can read directly -- no HTML parsing or
 #' indexing required. Follows the llmstxt.org convention.
 #'
 #' @param targets_data  Output of [load_targets_data()].

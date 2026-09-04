@@ -1,6 +1,6 @@
 # R/generate_wasm_viewer.R
 #
-# Tier 2 — self-contained WASM analytics viewer.
+# Tier 2 -- self-contained WASM analytics viewer.
 # Loads inst/templates/wasm_analytics.html and embeds the analytics dataset.
 # Opens as file:// with no server: share, deploy to GitHub Pages, etc.
 
