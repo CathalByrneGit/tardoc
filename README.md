@@ -2,6 +2,10 @@
 
 Auto-generate documentation for any [targets](https://docs.ropensci.org/targets/) pipeline. Point tardoc at your project and get structured markdown, a browsable HTML viewer, and — optionally — a full analytics stack with SQL queries, semantic search, git history, code intelligence, and an LLM chat interface.
 
+![The tardoc viewer showing a targets pipeline dependency graph](man/figures/viewer-overview.png)
+
+<sub>The tier 1 viewer, generated from the runnable example pipeline in [`inst/examples/station-monitoring`](inst/examples/station-monitoring). Nothing here is hand-written — every page, badge and graph comes from `_targets.R` and the roxygen comments in `R/`. See that directory's README to reproduce these screenshots.</sub>
+
 ---
 
 ## Four tiers, all from one command
@@ -57,6 +61,24 @@ my_project/
 - Per target: R command, build status, last built timestamp, functions called, mermaid local dependency graph
 - Per function: rendered roxygen docs, full source code
 - Notes panel — content from `notes/` files appears at the bottom of each page
+
+**What a target page looks like:**
+
+![A target page showing status, command, functions called and a local dependency graph](man/figures/viewer-target.png)
+
+Build status and last-built timestamp come from the `_targets` store; the local graph is centred on the target you are viewing, with its immediate upstream and downstream neighbours.
+
+**What a function page looks like:**
+
+![A function page showing rendered roxygen documentation above the function source](man/figures/viewer-function.png)
+
+Roxygen is rendered to HTML — title, description, arguments, return value — with the full source underneath.
+
+**Search:**
+
+![Fuzzy search results across targets and functions](man/figures/viewer-search.png)
+
+Fuse.js indexes names, descriptions and commands across both targets and functions, so a partial match on any of them finds the page.
 
 **Notes:**
 

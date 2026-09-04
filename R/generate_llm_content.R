@@ -134,15 +134,32 @@ generate_llm_content <- function(targets_data, function_names, cfg,
 
 .inject_explanation <- function(path, explanation) {
   if (!file.exists(path)) return(invisible(NULL))
-  content <- paste(readLines(path, warn = FALSE), collapse = "\n")
-  block <- paste0("\n## LLM Explanation\n\n_Auto-generated._\n\n", explanation, "\n")
-  if (grepl("## LLM Explanation", content, fixed = TRUE)) {
-    content <- sub("(\n## LLM Explanation\n).*?(\n##|\n<!-- tardoc:end -->)",
-                   paste0(block, "\\2"), content, perl = TRUE)
-  } else {
-    content <- sub("(<!-- tardoc:end -->)", paste0(block, "\\1"), content, fixed = TRUE)
+  lines   <- readLines(path, warn = FALSE)
+  end_tag <- "<!-- tardoc:end -->"
+
+  # Drop any previous block first, so re-running replaces it instead of
+  # stacking a second one: from the heading up to the next heading or the end
+  # marker, whichever comes first.
+  start <- which(lines == "## LLM Explanation")
+  if (length(start) > 0) {
+    s     <- start[1]
+    after <- seq_along(lines)[-seq_len(s)]
+    stops <- after[grepl("^## |^<!-- tardoc:end -->$", lines[after])]
+    e     <- if (length(stops) > 0) stops[1] - 1L else length(lines)
+    lines <- lines[-seq.int(s, e)]
   }
-  writeLines(content, path)
+
+  # Build the block as lines rather than substituting it into a regex: the
+  # explanation is model output and may contain backslashes or backreference
+  # syntax, which sub() would interpret.
+  block <- c("## LLM Explanation", "", "_Auto-generated._", "", explanation, "")
+  at    <- which(lines == end_tag)
+  lines <- if (length(at) > 0) {
+    append(lines, block, after = at[1] - 1L)
+  } else {
+    c(lines, block)
+  }
+  writeLines(lines, path)
 }
 
 .has_description <- function(r) {

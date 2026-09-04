@@ -19,5 +19,10 @@ Useful links:
 \author{
 \strong{Maintainer}: Cathal Byrne \email{cathal.byrne@cso.ie}
 
+Authors:
+\itemize{
+  \item Cathal Byrne \email{cathal.byrne@cso.ie}
+}
+
 }
 \keyword{internal}

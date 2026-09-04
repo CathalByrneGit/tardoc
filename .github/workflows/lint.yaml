@@ -46,7 +46,9 @@ jobs:
 
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
-          extra-packages: any::roxygen2
+          # Pinned: an unpinned roxygen2 reformats Rd on every upstream
+          # release, which would fail this job on an untouched repo.
+          extra-packages: roxygen2@8.1.0
           needs: roxygen2
 
       - name: Regenerate documentation
