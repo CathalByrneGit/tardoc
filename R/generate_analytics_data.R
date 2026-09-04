@@ -3,7 +3,7 @@
 #' Generate the analytics dataset for the DuckDB WASM viewer
 #'
 #' Writes `tardoc_analytics.json` into `cfg$site_path`. This is a richer
-#' dataset than `search_index.json` — it includes the full edge list (for
+#' dataset than `search_index.json` -- it includes the full edge list (for
 #' graph traversal), notes content, and all fields needed for SQL analytics.
 #' The DuckDB WASM analytics viewer loads this file and ingests it into
 #' in-browser tables.
@@ -59,7 +59,7 @@ generate_analytics_data <- function(targets_data, function_names, cfg) {
   })
 
   # ---- edges table ----------------------------------------------------------
-  # Full edge list from the network — used for recursive graph queries
+  # Full edge list from the network -- used for recursive graph queries
   edges <- targets_data$network$edges
   edge_rows <- lapply(seq_len(nrow(edges)), function(i) {
     list(from_target = edges$from[i], to_target = edges$to[i])

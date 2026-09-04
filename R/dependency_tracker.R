@@ -11,7 +11,7 @@
 #' @param max_depth_up   Integer. Max depth for upstream traversal. Use `Inf`
 #'   for the full graph.
 #' @param max_depth_down Integer. Max depth for downstream traversal.
-#' @param visited_up,visited_down Internal recursion tracking vectors — leave
+#' @param visited_up,visited_down Internal recursion tracking vectors -- leave
 #'   as `NULL` when calling directly.
 #'
 #' @return A list with:

@@ -4,7 +4,7 @@
 #'
 #' Writes `viewer.html` into `cfg$site_path` by loading
 #' `inst/templates/viewer.html` and substituting data placeholders.
-#' No R string escaping — the template is plain HTML with real JavaScript.
+#' No R string escaping -- the template is plain HTML with real JavaScript.
 #'
 #' @param targets_data   Output of [load_targets_data()].
 #' @param function_names Character vector of function names.
@@ -64,7 +64,7 @@ generate_viewer <- function(targets_data, function_names, cfg,
 .load_template <- function(filename) {
   path <- system.file("templates", filename, package = "tardoc")
   if (!nzchar(path)) {
-    # devtools::load_all() fallback — look relative to package root
+    # devtools::load_all() fallback -- look relative to package root
     candidates <- c(
       file.path("inst", "templates", filename),
       file.path(find.package("tardoc", quiet = TRUE), "inst", "templates", filename)

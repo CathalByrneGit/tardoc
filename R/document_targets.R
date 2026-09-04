@@ -6,9 +6,9 @@
 #' analytics viewer, Tier 3/4 server analytics database, and `llms.txt`.
 #'
 #' **Tiers produced:**
-#' - Tier 1: `viewer.html` — opens as `file://`, no server
-#' - Tier 2: `wasm_analytics.html` — DuckDB WASM, opens as `file://`, data embedded
-#' - Tier 3/4: `tardoc.duckdb` — for `view_tardoc_db()` with Quack + LLM chat
+#' - Tier 1: `viewer.html` -- opens as `file://`, no server
+#' - Tier 2: `wasm_analytics.html` -- DuckDB WASM, opens as `file://`, data embedded
+#' - Tier 3/4: `tardoc.duckdb` -- for `view_tardoc_db()` with Quack + LLM chat
 #'
 #' @param project_path  Path to the targets project root. Default `"."`.
 #' @param site_dir      Subfolder for all generated content. Default `"tardoc"`.
@@ -31,7 +31,7 @@
 #'
 #' @examples
 #' \dontrun{
-#' # Minimal — Tier 1 + 2 always, Tier 3 if duckdb installed
+#' # Minimal -- Tier 1 + 2 always, Tier 3 if duckdb installed
 #' document_targets(pkg_name = "My pipeline")
 #' view_tardoc()              # Tier 1: file:// viewer
 #' view_wasm_analytics()      # Tier 2: WASM, file://
@@ -136,7 +136,7 @@ view_tardoc <- function(project_path = ".", site_dir = "tardoc") {
 #'
 #' Opens `wasm_analytics.html` directly in the browser. DuckDB WASM is loaded
 #' from CDN; all pipeline data is embedded in the HTML. Provides full SQL /
-#' dplyr queries, BM25 search, and lineage — no R process required after
+#' dplyr queries, BM25 search, and lineage -- no R process required after
 #' `document_targets()` has run.
 #'
 #' @param project_path Path to the targets project root.
@@ -186,7 +186,7 @@ view_tardoc_db <- function(project_path = ".", site_dir = "tardoc",
   # extensions if db_extensions = TRUE and was previously built without them
   if (!file.exists(db_path) || isTRUE(db_extensions)) {
     if (!requireNamespace("duckdb", quietly = TRUE)) {
-      message("'duckdb' not installed — skipping database generation. ",
+      message("'duckdb' not installed -- skipping database generation. ",
               "Install with: install.packages('duckdb')")
     } else {
       td <- load_targets_data(cfg)
@@ -215,6 +215,21 @@ view_tardoc_db <- function(project_path = ".", site_dir = "tardoc",
     }, error = function(e) NULL)
   }
 
+  # A FAISS index is saved beside the database, not inside it. If the sidecars
+  # are missing (database built by an older tardoc, or files moved) semantic
+  # search cannot work, so drop the claim rather than serve a broken button.
+  faiss_paths <- character(0)
+  if (has_faiss) {
+    faiss_paths <- vapply(names(.faiss_indexes),
+                          function(i) .faiss_index_path(cfg, i), character(1))
+    faiss_paths <- faiss_paths[file.exists(faiss_paths)]
+    if (length(faiss_paths) < length(.faiss_indexes)) {
+      message("FAISS index files missing -- semantic search disabled.")
+      has_faiss   <- FALSE
+      faiss_paths <- character(0)
+    }
+  }
+
   # Configure chat
   chat_con <- NULL
   sql_log  <- new.env(parent = emptyenv())
@@ -240,25 +255,38 @@ view_tardoc_db <- function(project_path = ".", site_dir = "tardoc",
     message("Starting Quack server on port ", quack_port, "...")
     quack_proc <- tryCatch(
       callr::r_bg(
-        func = function(db_path, token, quack_port) {
+        func = function(db_path, token, quack_port, faiss_paths) {
           con <- duckdb::dbConnect(duckdb::duckdb(), db_path, read_only = TRUE)
+          # The semantic-search query calls embed() and FAISS_SEARCH, so this
+          # serving connection needs both extensions loaded and the saved
+          # index restored -- neither carries over from the build connection.
+          if (length(faiss_paths)) {
+            try({
+              DBI::dbExecute(con, "LOAD quackformers;")
+              DBI::dbExecute(con, "LOAD faiss;")
+              for (idx in names(faiss_paths)) {
+                DBI::dbExecute(con, sprintf("CALL FAISS_LOAD('%s', '%s')",
+                                            idx, faiss_paths[[idx]]))
+              }
+            }, silent = TRUE)
+          }
           DBI::dbExecute(con, "INSTALL quack FROM core_nightly; LOAD quack;")
           DBI::dbExecute(con, sprintf(
             "CALL quack_serve('quack:localhost:%d', token = '%s');",
             quack_port, token
           ))
         },
-        args = list(db_path, token, quack_port),
+        args = list(db_path, token, quack_port, faiss_paths),
         supervise = TRUE
       ),
       error = function(e) {
-        message("Quack unavailable (", conditionMessage(e), ") — JSON fallback.")
+        message("Quack unavailable (", conditionMessage(e), ") -- JSON fallback.")
         NULL
       }
     )
     Sys.sleep(1.5)
     if (!is.null(quack_proc) && !quack_proc$is_alive()) {
-      message("Quack exited early — JSON fallback.")
+      message("Quack exited early -- JSON fallback.")
       quack_proc <- NULL
     }
   }
@@ -338,7 +366,7 @@ view_tardoc_db <- function(project_path = ".", site_dir = "tardoc",
 #'
 #' Starts the DuckDB `duckdb_mcp` extension server, making `tardoc.duckdb`
 #' queryable by any MCP-compatible LLM client. Also writes
-#' `tardoc/tardoc_mcp_config.json` — add its contents to your Claude Desktop
+#' `tardoc/tardoc_mcp_config.json` -- add its contents to your Claude Desktop
 #' configuration to make the pipeline database available as a persistent tool.
 #'
 #' @param project_path Path to the targets project root.

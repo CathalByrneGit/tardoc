@@ -3,7 +3,7 @@
 # Tier 3/4 analytics viewer. Loads inst/templates/analytics.html and
 # substitutes the project title. Quack/LLM tokens are injected later by
 # inject_quack_session() when view_tardoc_db() starts a session.
-# All JavaScript lives in the template — no R string escaping required.
+# All JavaScript lives in the template -- no R string escaping required.
 
 #' Generate the server analytics viewer template
 #'
@@ -29,7 +29,7 @@ generate_analytics_viewer <- function(cfg, pkg_name = "targets docs") {
 #' Inject Quack session credentials into the analytics template
 #'
 #' Reads `analytics.html`, replaces the placeholder tokens with live values,
-#' and writes `_session_analytics.html` — the file served at
+#' and writes `_session_analytics.html` -- the file served at
 #' `http://localhost:<port>` by [view_tardoc_db()].
 #'
 #' @param cfg         A site config list.

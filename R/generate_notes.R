@@ -4,7 +4,7 @@
 #'
 #' Creates empty note files under `cfg$notes_targets` and
 #' `cfg$notes_functions` for any target or function that does not already
-#' have one. Existing note files are **never** touched — they are
+#' have one. Existing note files are **never** touched -- they are
 #' entirely user-owned.
 #'
 #' Note files live at:
@@ -58,7 +58,7 @@ read_note <- function(name, type = c("targets", "functions"), cfg) {
 .note_stub <- function(type, name) {
   paste0(
     "<!-- Notes for ", type, ": ", name, " -->\n",
-    "<!-- This file is yours — tardoc will never overwrite it. -->\n",
+    "<!-- This file is yours -- tardoc will never overwrite it. -->\n",
     "<!-- Add context, decisions, links, or anything useful. -->\n\n"
   )
 }

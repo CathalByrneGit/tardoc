@@ -5,7 +5,7 @@
 #' Writes one `.md` file per target into `cfg$targets_dir`. Each file contains
 #' a mermaid local dependency diagram, command, status, and function links.
 #' Only the region between `<!-- tardoc:generated -->` markers is overwritten
-#' on re-runs — any content outside those markers is preserved.
+#' on re-runs -- any content outside those markers is preserved.
 #'
 #' @param targets_data Output of [load_targets_data()].
 #' @param cfg          A site config list.
@@ -126,13 +126,13 @@ generate_all_target_pages <- function(targets_data, cfg) {
   )
 
   if (!file.exists(path)) {
-    # New file — write header + generated block with empty notes section
+    # New file -- write header + generated block with empty notes section
     writeLines(paste0(
       header,
       generated_section
     ), path)
   } else {
-    # Existing file — replace only the generated block, preserve everything else
+    # Existing file -- replace only the generated block, preserve everything else
     existing <- paste(readLines(path, warn = FALSE), collapse = "\n")
     new_content <- .replace_generated_block(existing, header, generated_section)
     writeLines(new_content, path)
@@ -159,7 +159,7 @@ generate_all_target_pages <- function(targets_data, cfg) {
                                   fixed = TRUE)),
          before, fixed = TRUE)
   } else {
-    # No markers found — rewrite with header + generated block
+    # No markers found -- rewrite with header + generated block
     paste0(header, generated_section)
   }
 }

@@ -205,7 +205,7 @@ async function init() {
   badge.textContent = 'Connecting&hellip;'; badge.className = '';
   try {
     msg.style.display = 'none';  // status shown in badge only
-    const duckdb = await import('https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@latest/+esm');
+    const duckdb = await import('https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.32.0/+esm');
     const bundle = await duckdb.selectBundle(duckdb.getJsDelivrBundles());
     const worker = new Worker(URL.createObjectURL(
       new Blob([`importScripts("${bundle.mainWorker}");`], {type:'text/javascript'})

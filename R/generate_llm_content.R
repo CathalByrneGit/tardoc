@@ -4,6 +4,26 @@
 # Called only when document_targets(llm = TRUE).
 
 #' Generate LLM content for undescribed targets and all functions
+#'
+#' Fills in descriptions for targets that have none and adds a plain-language
+#' explanation to each function page. Requires the `ellmer` package.
+#'
+#' @param targets_data   Output of [load_targets_data()].
+#' @param function_names Character vector of function names to explain.
+#' @param cfg            A site config list.
+#' @param llm_chat       An existing `ellmer` Chat object. When supplied,
+#'   `provider`, `model`, `api_key` and `base_url` are ignored.
+#' @param provider       Character. One of `"openai"`, `"anthropic"`,
+#'   `"ollama"`, or `"openai_compatible"`. Default `"openai"`.
+#' @param model          Character. Model name. Defaults to the provider's own
+#'   default when `NULL`.
+#' @param api_key        Character. API key. When `NULL` the provider's
+#'   standard environment variable is used.
+#' @param base_url       Character. Base URL for `"ollama"` and
+#'   `"openai_compatible"` providers.
+#'
+#' @return Invisibly `NULL`; called for its side effect of rewriting the
+#'   generated blocks of the target and function markdown pages.
 #' @export
 generate_llm_content <- function(targets_data, function_names, cfg,
                                   llm_chat = NULL, provider = "openai",
@@ -114,15 +134,32 @@ generate_llm_content <- function(targets_data, function_names, cfg,
 
 .inject_explanation <- function(path, explanation) {
   if (!file.exists(path)) return(invisible(NULL))
-  content <- paste(readLines(path, warn = FALSE), collapse = "\n")
-  block <- paste0("\n## LLM Explanation\n\n_Auto-generated._\n\n", explanation, "\n")
-  if (grepl("## LLM Explanation", content, fixed = TRUE)) {
-    content <- sub("(\n## LLM Explanation\n).*?(\n##|\n<!-- tardoc:end -->)",
-                   paste0(block, "\\2"), content, perl = TRUE)
-  } else {
-    content <- sub("(<!-- tardoc:end -->)", paste0(block, "\\1"), content, fixed = TRUE)
+  lines   <- readLines(path, warn = FALSE)
+  end_tag <- "<!-- tardoc:end -->"
+
+  # Drop any previous block first, so re-running replaces it instead of
+  # stacking a second one: from the heading up to the next heading or the end
+  # marker, whichever comes first.
+  start <- which(lines == "## LLM Explanation")
+  if (length(start) > 0) {
+    s     <- start[1]
+    after <- seq_along(lines)[-seq_len(s)]
+    stops <- after[grepl("^## |^<!-- tardoc:end -->$", lines[after])]
+    e     <- if (length(stops) > 0) stops[1] - 1L else length(lines)
+    lines <- lines[-seq.int(s, e)]
   }
-  writeLines(content, path)
+
+  # Build the block as lines rather than substituting it into a regex: the
+  # explanation is model output and may contain backslashes or backreference
+  # syntax, which sub() would interpret.
+  block <- c("## LLM Explanation", "", "_Auto-generated._", "", explanation, "")
+  at    <- which(lines == end_tag)
+  lines <- if (length(at) > 0) {
+    append(lines, block, after = at[1] - 1L)
+  } else {
+    c(lines, block)
+  }
+  writeLines(lines, path)
 }
 
 .has_description <- function(r) {

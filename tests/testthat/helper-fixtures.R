@@ -63,3 +63,19 @@ write_mock_r_file <- function(dir, filename = "helpers.R") {
   ), path)
   path
 }
+
+# Shape produced by .build_analytics_data() and consumed by the WASM viewer.
+mock_analytics_data <- function(td = mock_targets_data()) {
+  list(
+    pkg_name  = "Test pipeline",
+    targets   = lapply(td$target_names, function(tn) list(
+      name = tn, description = "", command = "f()", status = "uptodate",
+      last_built = "", n_upstream = 0L, n_downstream = 0L, notes = "",
+      upstream = list(), downstream = list()
+    )),
+    functions = list(),
+    edges     = lapply(seq_len(nrow(td$network$edges)), function(i) list(
+      from = td$network$edges$from[i], to = td$network$edges$to[i]
+    ))
+  )
+}

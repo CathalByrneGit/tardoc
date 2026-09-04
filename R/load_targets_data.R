@@ -2,7 +2,7 @@
 
 #' Load all targets project data
 #'
-#' `tar_manifest()` and `tar_network()` only require `_targets.R` to exist —
+#' `tar_manifest()` and `tar_network()` only require `_targets.R` to exist --
 #' they parse the pipeline definition without needing a store. `tar_meta()`
 #' requires the store (i.e. the pipeline has been run at least once) and
 #' provides run history: status, timestamps, and errors. If no store is found
@@ -27,19 +27,19 @@ load_targets_data <- function(cfg) {
     targets::tar_config_set(store = cfg$targets_store)
 
     # These two only need _targets.R ---------------------------------------
-    manifest     <<- targets::tar_manifest()
-    network      <<- targets::tar_network(targets_only = FALSE, reporter = "silent")
-    target_names <<- dplyr::pull(manifest, name)
+    manifest     <- targets::tar_manifest()
+    network      <- targets::tar_network(targets_only = FALSE, reporter = "silent")
+    target_names <- dplyr::pull(manifest, "name")
 
     # Meta needs the store -------------------------------------------------
-    has_store <<- file.exists(cfg$targets_store)
+    has_store <- file.exists(cfg$targets_store)
 
     if (has_store) {
-      meta <<- targets::tar_meta(fields = targets::everything())
-      message("Store found — run metadata loaded.")
+      meta <- targets::tar_meta(fields = targets::everything())
+      message("Store found -- run metadata loaded.")
     } else {
-      message("No store found — status and timestamps will be unavailable.")
-      meta <<- .empty_meta(target_names)
+      message("No store found -- status and timestamps will be unavailable.")
+      meta <- .empty_meta(target_names)
     }
   })
 
