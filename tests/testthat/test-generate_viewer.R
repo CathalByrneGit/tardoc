@@ -22,18 +22,22 @@ test_that("no template placeholders survive into the output", {
   expect_false(grepl("__[A-Z_]+__", html))
 })
 
-test_that("every CDN script is version-pinned with integrity", {
+test_that("every external asset is version-pinned with integrity", {
   tmp <- withr::local_tempdir(); cfg <- mock_cfg(tmp); setup_site_dirs(cfg)
   generate_viewer(mock_targets_data(), character(), cfg, pkg_name = "Test pipeline")
   html <- paste(readLines(file.path(cfg$site_path, "viewer.html"), warn = FALSE),
                 collapse = "\n")
-  srcs <- regmatches(html, gregexpr('src="https://[^"]+"', html))[[1]]
-  expect_true(length(srcs) > 0)
-  # An unpinned jsdelivr path silently tracks whatever release still ships
-  # that filename, so the viewer must never contain one.
-  expect_false(any(grepl("jsdelivr", srcs) & !grepl("@[0-9]", srcs)))
+  # Scripts and stylesheets alike, across both CDNs the viewer uses.
+  assets <- regmatches(html, gregexpr('(src|href)="https://(cdn\\.jsdelivr|cdnjs)[^"]+"',
+                                      html))[[1]]
+  expect_true(length(assets) >= 6)
+  # An unpinned path silently tracks whatever release still ships that
+  # filename, so the viewer must never contain one. jsdelivr pins read
+  # "pkg@1.2.3", cdnjs pins read "/libs/pkg/1.2.3/".
+  expect_false(any(!grepl("@[0-9]|/[0-9]+\\.[0-9]", assets)))
+  # One integrity attribute per external asset.
   expect_equal(
     length(regmatches(html, gregexpr("integrity=\"sha384-", html))[[1]]),
-    sum(grepl("jsdelivr", srcs))
+    length(assets)
   )
 })

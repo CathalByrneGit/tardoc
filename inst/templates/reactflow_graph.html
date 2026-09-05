@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{PKG_NAME}} — pipeline graph</title>
+
+<!-- Prototype: React Flow in place of mermaid.
+     React Flow v11 is used deliberately. Its UMD build needs only the React and
+     ReactDOM globals; the v12 UMD additionally expects a `jsxRuntime` global,
+     which React 18's UMD build does not expose, so v12 would need a shim or a
+     bundler. v11 drops straight in.
+     Pinned with subresource integrity, matching viewer.html's approach. -->
+<link rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/reactflow@11.11.4/dist/style.css"
+      integrity="sha384-uySezIHhsCs2A2+GIarZ89Bi2gd6yjY0I1FFVamfrk6hgEUWLuBYlXA7bYr6dHaJ"
+      crossorigin="anonymous" referrerpolicy="no-referrer">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"
+        integrity="sha384-DGyLxAyjq0f9SPpVevD6IgztCFlnMF6oW/XQGmfe+IsZ8TqEiDrcHkMLKI6fiB/Z"
+        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"
+        integrity="sha384-gTGxhz21lVGYNMcdJOyq01Edg0jhn/c22nsx0kyqP0TxaV5WVdsSH1fSDUf5YJj1"
+        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script src="https://cdn.jsdelivr.net/npm/reactflow@11.11.4/dist/umd/index.js"
+        integrity="sha384-lA1w00Vex5qXDv4/xYJO/e8SCjfdlNghbTP+s+2zl37rCEAC7trsSRpYrv/JQy5y"
+        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+<style>
+  :root {
+    --bg:#1e1e2e; --panel:#181825; --surface:#313244; --edge:#45475a;
+    --text:#cdd6f4; --muted:#6c7086; --accent:#6d28d9; --accent-soft:#a78bfa;
+    --ok:#a6e3a1; --err:#f38ba8;
+  }
+  * { box-sizing:border-box; }
+  html, body { height:100%; }
+  body {
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    display:flex; flex-direction:column;
+  }
+  header {
+    padding:14px 20px; border-bottom:1px solid var(--surface);
+    background:var(--panel); display:flex; align-items:baseline; gap:14px; flex-wrap:wrap;
+  }
+  h1 { font-size:16px; margin:0; font-weight:600; }
+  .meta { font-size:12px; color:var(--muted); display:flex; gap:16px; flex-wrap:wrap; }
+  .meta b { color:var(--text); font-weight:500; }
+  #stage { position:relative; flex:1; min-height:0; display:flex; }
+  #graph { flex:1; min-height:0; }
+
+  /* Node styling. React Flow draws no chrome of its own, so the node is ours. */
+  .tnode {
+    background:var(--surface); border:1px solid var(--edge); border-radius:6px;
+    padding:8px 12px; min-width:150px; color:var(--text);
+    font-size:13px; line-height:1.35;
+  }
+  .tnode.errored { border-color:var(--err); }
+  .tnode .nm { font-weight:600; }
+  .tnode .st { font-size:11px; color:var(--muted); margin-top:2px; }
+  .tnode.errored .st { color:var(--err); }
+  .tnode.uptodate .st { color:var(--ok); }
+  .react-flow__node.selected .tnode { border-color:var(--accent-soft); }
+  .react-flow__attribution { background:transparent; color:var(--muted); }
+  .tnode { cursor:pointer; }
+  .tnode:hover { border-color:var(--accent-soft); }
+
+  /* Detail panel: opens on node click, closes on Escape or the backdrop. */
+  #panel {
+    position:absolute; top:0; right:0; bottom:0; width:min(420px,92vw);
+    background:var(--panel); border-left:1px solid var(--surface);
+    padding:18px 20px 24px; overflow-y:auto; z-index:6;
+    box-shadow:-8px 0 24px rgba(0,0,0,.35);
+  }
+  #panel[hidden] { display:none; }
+  #panel .close {
+    position:absolute; top:12px; right:14px; background:none; border:none;
+    color:var(--muted); font-size:20px; cursor:pointer; line-height:1;
+  }
+  #panel .close:hover { color:var(--text); }
+  #panel h2 { margin:0 0 2px; font-size:17px; font-family:inherit; }
+  #panel .pill {
+    display:inline-block; font-size:11px; padding:2px 8px; border-radius:10px;
+    background:var(--surface); color:var(--muted); margin-bottom:14px;
+  }
+  #panel .pill.uptodate { color:var(--ok); }
+  #panel .pill.errored  { color:var(--err); }
+  #panel h3 {
+    font-size:11px; text-transform:uppercase; letter-spacing:.09em;
+    color:var(--muted); margin:16px 0 6px; font-weight:600;
+  }
+  #panel p, #panel pre { margin:0; font-size:13px; }
+  #panel pre {
+    background:var(--bg); border:1px solid var(--surface); border-radius:6px;
+    padding:9px 11px; overflow-x:auto; font-size:12px; line-height:1.5;
+    white-space:pre-wrap; word-break:break-word;
+  }
+  #panel .chips { display:flex; flex-wrap:wrap; gap:6px; }
+  #panel .chip {
+    background:var(--surface); border-radius:5px; padding:3px 8px;
+    font-size:12px; cursor:pointer; border:1px solid transparent;
+  }
+  #panel .chip:hover { border-color:var(--accent-soft); color:var(--accent-soft); }
+  #panel .none { color:var(--muted); font-style:italic; font-size:12px; }
+  #panel .open {
+    display:inline-block; margin-top:20px; padding:8px 14px; border-radius:6px;
+    background:var(--accent); color:#fff; text-decoration:none; font-size:13px;
+    font-weight:500;
+  }
+  #panel .open:hover { background:var(--accent-soft); color:#1e1e2e; }
+  #panel a:focus-visible, #panel button:focus-visible, .chip:focus-visible {
+    outline:2px solid var(--accent-soft); outline-offset:2px;
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="title">{{PKG_NAME}}</h1>
+  <div class="meta">
+    <span><b id="n-nodes">0</b> targets</span>
+    <span><b id="n-edges">0</b> edges</span>
+    <span><b id="n-layers">0</b> layers</span>
+    <span>drag to pan &middot; scroll to zoom &middot; drag a node to move it</span>
+  </div>
+</header>
+<div id="stage">
+  <div id="graph"></div>
+  <aside id="panel" hidden aria-label="Target details"></aside>
+</div>
+
+<script>
+const GRAPH = {{GRAPH_JSON}};
+
+// No JSX, so no build step: React.createElement directly.
+const e = React.createElement;
+const RF = window.ReactFlow;
+const Flow = RF.ReactFlow || RF.default;
+
+// Positions arrive precomputed from dag_layout() in R. React Flow performs no
+// layout of its own -- that is the one real cost of moving off mermaid.
+const nodes = GRAPH.nodes.map(function (n) {
+  return {
+    id: n.id,
+    position: { x: n.x, y: n.y },
+    data: { label: e('div', { className: 'tnode ' + n.status },
+                     e('div', { className: 'nm' }, n.label),
+                     e('div', { className: 'st' }, n.status)) },
+    sourcePosition: RF.Position.Right,
+    targetPosition: RF.Position.Left,
+    style: { background: 'transparent', border: 'none', padding: 0, width: 'auto' }
+  };
+});
+
+const edges = GRAPH.edges.map(function (d) {
+  return {
+    id: d.id, source: d.source, target: d.target,
+    animated: false, style: { stroke: '#a6adc8', strokeWidth: 1.5 },
+    markerEnd: { type: RF.MarkerType.ArrowClosed, color: '#a6adc8' }
+  };
+});
+
+document.getElementById('n-nodes').textContent = nodes.length;
+document.getElementById('n-edges').textContent = edges.length;
+document.getElementById('n-layers').textContent =
+  new Set(GRAPH.nodes.map(function (n) { return n.layer; })).size;
+
+// ---- detail panel ---------------------------------------------------------
+const BY_ID = {};
+GRAPH.nodes.forEach(function (n) { BY_ID[n.id] = n; });
+const panelEl = document.getElementById('panel');
+
+function esc(t) {
+  return String(t == null ? '' : t)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function chips(list) {
+  if (!list || !list.length) return '<p class="none">none</p>';
+  return '<div class="chips">' + list.map(function (n) {
+    return '<button class="chip" data-goto="' + esc(n) + '">' + esc(n) + '</button>';
+  }).join('') + '</div>';
+}
+
+function section(title, body) {
+  return body ? '<h3>' + title + '</h3>' + body : '';
+}
+
+function openPanel(id) {
+  const n = BY_ID[id];
+  if (!n) return;
+  // The viewer reads this hash on load, so the link lands on the target's page
+  // rather than just opening the viewer at its home panel.
+  const href = '../viewer.html#targets:' + encodeURIComponent(n.id);
+  panelEl.innerHTML =
+    '<button class="close" aria-label="Close">&times;</button>' +
+    '<h2>' + esc(n.label) + '</h2>' +
+    '<span class="pill ' + esc(n.status) + '">' + esc(n.status) + '</span>' +
+    section('Description', n.description
+      ? '<p>' + esc(n.description) + '</p>'
+      : '<p class="none">no description</p>') +
+    section('Command', n.command ? '<pre>' + esc(n.command) + '</pre>' : '') +
+    section('Last built', n.last_built
+      ? '<p>' + esc(n.last_built) + '</p>'
+      : '<p class="none">never built</p>') +
+    (n.error ? section('Error', '<pre>' + esc(n.error) + '</pre>') : '') +
+    section('Depends on', chips(n.upstream)) +
+    section('Feeds into', chips(n.downstream)) +
+    '<a class="open" href="' + href + '">Open full page &rarr;</a>';
+  panelEl.hidden = false;
+  panelEl.querySelector('.close').onclick = closePanel;
+  panelEl.querySelectorAll('[data-goto]').forEach(function (b) {
+    b.onclick = function () { openPanel(b.getAttribute('data-goto')); };
+  });
+  panelEl.scrollTop = 0;
+}
+
+function closePanel() { panelEl.hidden = true; }
+
+document.addEventListener('keydown', function (ev) {
+  if (ev.key === 'Escape') closePanel();
+});
+
+function Graph() {
+  return e(Flow, {
+    defaultNodes: nodes,
+    defaultEdges: edges,
+    fitView: true,
+    fitViewOptions: { padding: 0.15 },
+    minZoom: 0.1,
+    onNodeClick: function (_ev, node) { openPanel(node.id); },
+    onPaneClick: closePanel,
+    proOptions: { hideAttribution: false }
+  },
+    e(RF.Background, { color: '#313244', gap: 18 }),
+    e(RF.Controls, null),
+    e(RF.MiniMap, {
+      pannable: true, zoomable: true,
+      style: { background: '#181825' },
+      maskColor: 'rgba(30,30,46,0.75)',
+      nodeColor: function (n) { return '#45475a'; }
+    })
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('graph')).render(e(Graph));
+</script>
+</body>
+</html>

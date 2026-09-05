@@ -70,3 +70,48 @@ mock_analytics_data <- function(td = mock_targets_data()) {
     ))
   )
 }
+
+# A pipeline with dynamic branching. `pattern` is what declares a target
+# branched; `children` is deliberately populated for the plain stem too,
+# because targets records branch names against stems that a pattern maps over.
+mock_branched_data <- function() {
+  manifest <- dplyr::tibble(
+    name        = c("files", "chunk", "combos", "summary_all"),
+    command     = c("c('a.csv','b.csv')", "read_one(files)",
+                    "paste(grid_a, grid_b)", "sum(nchar(combos))"),
+    pattern     = c(NA_character_, "map(files)", "cross(grid_a, grid_b)", NA_character_),
+    format      = c("rds", "rds", "rds", "qs"),
+    repository  = c("local", "local", "aws", "local"),
+    iteration   = c("vector", "vector", "list", "vector"),
+    description = c("Input file list", "One branch per input file",
+                    NA_character_, "")
+  )
+  meta <- dplyr::tibble(
+    name     = manifest$name,
+    type     = c("stem", "pattern", "pattern", "stem"),
+    time     = as.character(Sys.time()),
+    error    = NA_character_,
+    warnings = c(NA_character_, "one warning", NA_character_, NA_character_),
+    bytes    = c(72, 174, 260, 58),
+    seconds  = c(0.001, 0.002, 1.5, 0.0005),
+    format   = manifest$format,
+    children = list(
+      c("files_aa", "files_bb"),      # a stem, yet children are recorded
+      c("chunk_1", "chunk_2", "chunk_3"),
+      c("combos_1", "combos_2", "combos_3", "combos_4"),
+      NA_character_
+    )
+  )
+  network <- list(
+    vertices = dplyr::tibble(
+      name     = manifest$name,
+      type     = c("stem", "pattern", "pattern", "stem"),
+      status   = "uptodate",
+      branches = c(NA, 3, 4, NA)   # as tar_network() reports it
+    ),
+    edges = dplyr::tibble(from = c("files", "chunk", "combos"),
+                          to   = c("chunk", "combos", "summary_all"))
+  )
+  list(meta = meta, target_names = manifest$name, network = network,
+       manifest = manifest, has_store = TRUE)
+}
