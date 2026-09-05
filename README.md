@@ -2,7 +2,7 @@
 
 Auto-generate documentation for any [targets](https://docs.ropensci.org/targets/) pipeline. Point tardoc at your project and get structured markdown, a browsable HTML viewer, and — optionally — a full analytics stack with SQL queries, semantic search, git history, code intelligence, and an LLM chat interface.
 
-![The tardoc viewer showing a targets pipeline dependency graph](man/figures/viewer-overview.png)
+![The tardoc viewer showing an interactive targets pipeline dependency graph](man/figures/viewer-overview.png)
 
 <sub>The tier 1 viewer, generated from the runnable example pipeline in [`inst/examples/station-monitoring`](inst/examples/station-monitoring). Nothing here is hand-written — every page, badge and graph comes from `_targets.R` and the roxygen comments in `R/`. See that directory's README to reproduce these screenshots.</sub>
 
@@ -36,7 +36,7 @@ tardoc::document_targets(pkg_name = "My pipeline")
 tardoc::view_tardoc()
 ```
 
-Writes `tardoc/viewer.html` — a single self-contained file that opens in any browser with no server and no R dependencies beyond what `document_targets()` already requires. All pipeline content is inlined into the file; the rendering libraries (`marked`, `mermaid`, `fuse.js`) are loaded from jsDelivr at exact pinned versions with subresource integrity, so the page needs network access on first open and will be served from the browser cache afterwards.
+Writes `tardoc/viewer.html` — a single self-contained file that opens in any browser with no server and no R dependencies beyond what `document_targets()` already requires. All pipeline content is inlined into the file; the rendering libraries (`marked`, `fuse.js`, and React + React Flow for the graph) are loaded from jsDelivr and cdnjs at exact pinned versions with subresource integrity, so the page needs network access on first open and will be served from the browser cache afterwards.
 
 **Output structure:**
 
@@ -57,16 +57,27 @@ my_project/
 
 **What the viewer includes:**
 
+- An interactive pipeline graph on the home page — drag to pan, scroll to zoom, minimap, and a **show functions** toggle that adds the functions each target calls as dashed nodes
+- Click any node to open an inspect panel: description, command, branching pattern, errors, build details, and clickable upstream / downstream neighbours
 - Fuzzy search across targets, functions, descriptions, and commands
-- Per target: R command, build status, last built timestamp, functions called, mermaid local dependency graph
+- Per target: R command, build status, last built timestamp, functions called, and a local dependency graph centred on that target
 - Per function: rendered roxygen docs, full source code
 - Notes panel — content from `notes/` files appears at the bottom of each page
+- Deep links — `viewer.html#targets:clean` opens that page directly, and selecting a page updates the hash
 
 **What a target page looks like:**
 
 ![A target page showing status, command, functions called and a local dependency graph](man/figures/viewer-target.png)
 
-Build status and last-built timestamp come from the `_targets` store; the local graph is centred on the target you are viewing, with its immediate upstream and downstream neighbours.
+Build status and last-built timestamp come from the `_targets` store; the local graph is centred on the target you are viewing, with its immediate upstream and downstream neighbours. Functions appear with a dashed border and a `function` label, and clicking any neighbour navigates to it.
+
+**Clicking a node on the overview graph:**
+
+![The inspect panel open on a target, showing its description, command, build details and neighbours](man/figures/viewer-inspect.png)
+
+The panel shows the target's description and command, its branching `pattern` when it is a dynamic target, any error or warnings, build details (format, repository, iteration, last built, runtime, size), and its neighbours as clickable chips. **Open full page →** navigates the viewer to that target.
+
+The graph is rendered with [React Flow](https://reactflow.dev), not mermaid — see [`docs/visualisation-prototypes.md`](docs/visualisation-prototypes.md) for why, what a node exposes, and where the branching fields come from. The generated `.md` files still carry a `mermaid` fence so they render on GitHub and anywhere else markdown is read; the viewer replaces it with a live graph built from the same data.
 
 **What a function page looks like:**
 
@@ -313,6 +324,18 @@ Opens `wasm_analytics.html` as `file://`. DuckDB WASM from CDN. Data embedded at
 | Argument | Default | Description |
 |---|---|---|
 | `port` | `8765` | MCP server port |
+
+### `generate_reactflow_graph(targets_data, cfg, pkg_name)`
+
+Writes a standalone full-screen `reactflow_graph.html` — the same graph as the
+viewer's, without the surrounding documentation. Not part of a default
+`document_targets()` run.
+
+### `build_dag_graph(targets_data, include_functions = TRUE)` / `dag_layout(nodes, edges)`
+
+The graph data and layout used by the viewer. `build_dag_graph()` returns the
+`{nodes, edges}` list React Flow consumes; `dag_layout()` assigns each node a
+column by longest-path depth. Exported so you can build a graph of your own.
 
 ### `get_fn_docs(fn_name, file)`
 
