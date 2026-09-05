@@ -143,3 +143,80 @@ test_that("the graph page pins its CDN assets with integrity", {
     length(srcs)
   )
 })
+
+# ---- dynamic branching -----------------------------------------------------
+
+test_that("a target with a pattern is marked branched, with its branch count", {
+  g  <- build_dag_graph(mock_branched_data())
+  by <- stats::setNames(g$nodes, vapply(g$nodes, `[[`, character(1), "id"))
+  expect_true(by[["chunk"]]$branched)
+  expect_equal(by[["chunk"]]$pattern, "map(files)")
+  expect_equal(by[["chunk"]]$n_branches, 3L)
+  expect_equal(by[["combos"]]$pattern, "cross(grid_a, grid_b)")
+  expect_equal(by[["combos"]]$n_branches, 4L)
+})
+
+test_that("a stem is not branched even when children are recorded against it", {
+  # targets records branch names against a stem that a pattern maps over, so
+  # `children` alone would wrongly report ordinary targets as branched.
+  # `pattern` is the target's own declaration and is the honest signal.
+  g  <- build_dag_graph(mock_branched_data())
+  by <- stats::setNames(g$nodes, vapply(g$nodes, `[[`, character(1), "id"))
+  expect_false(by[["files"]]$branched)
+  expect_equal(by[["files"]]$n_branches, 0L)
+  expect_equal(by[["files"]]$pattern, "")
+})
+
+test_that("a target with no children at all reports zero branches", {
+  g  <- build_dag_graph(mock_branched_data())
+  by <- stats::setNames(g$nodes, vapply(g$nodes, `[[`, character(1), "id"))
+  expect_false(by[["summary_all"]]$branched)
+  expect_equal(by[["summary_all"]]$n_branches, 0L)
+})
+
+test_that("storage and iteration settings come through", {
+  g  <- build_dag_graph(mock_branched_data())
+  by <- stats::setNames(g$nodes, vapply(g$nodes, `[[`, character(1), "id"))
+  expect_equal(by[["summary_all"]]$format, "qs")
+  expect_equal(by[["combos"]]$repository, "aws")
+  expect_equal(by[["combos"]]$iteration, "list")
+})
+
+test_that("runtime figures come through as numbers, not strings", {
+  g  <- build_dag_graph(mock_branched_data())
+  by <- stats::setNames(g$nodes, vapply(g$nodes, `[[`, character(1), "id"))
+  expect_equal(by[["combos"]]$seconds, 1.5)
+  expect_equal(by[["chunk"]]$bytes, 174)
+})
+
+test_that("warnings are carried through when present", {
+  g  <- build_dag_graph(mock_branched_data())
+  by <- stats::setNames(g$nodes, vapply(g$nodes, `[[`, character(1), "id"))
+  expect_equal(by[["chunk"]]$warnings, "one warning")
+  expect_equal(by[["files"]]$warnings, "")
+})
+
+test_that("build_dag_graph works when no store exists", {
+  # No meta rows: everything should still resolve, with runtime fields absent.
+  td <- mock_branched_data()
+  td$meta <- td$meta[0, ]
+  g <- build_dag_graph(td)
+  by <- stats::setNames(g$nodes, vapply(g$nodes, `[[`, character(1), "id"))
+  expect_true(by[["chunk"]]$branched)      # pattern is static, still known
+  expect_equal(by[["chunk"]]$n_branches, 0L)
+  expect_true(is.na(by[["chunk"]]$seconds))
+})
+
+test_that("the viewer embeds the graph and keeps its navigation functions", {
+  tmp <- withr::local_tempdir(); cfg <- mock_cfg(tmp); setup_site_dirs(cfg)
+  generate_viewer(mock_branched_data(), character(), cfg, pkg_name = "Branchy")
+  html <- paste(readLines(file.path(cfg$site_path, "viewer.html"), warn = FALSE),
+                collapse = "\n")
+  expect_true(grepl("rf-graph", html, fixed = TRUE))
+  expect_true(grepl("map(files)", html, fixed = TRUE))
+  # The React Flow block once ate these when its boundary was wrong.
+  for (fn in c("function showTab", "function renderNavList", "function loadPage",
+               "function expandMermaid", "function closeMermaid")) {
+    expect_true(grepl(fn, html, fixed = TRUE), info = fn)
+  }
+})

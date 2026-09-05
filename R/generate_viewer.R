@@ -51,6 +51,12 @@ generate_viewer <- function(targets_data, function_names, cfg,
   html <- gsub("{{PAGES_JSON}}",    pages_json,                                   html, fixed = TRUE)
   html <- gsub("{{INDEX_JSON}}",    index_json,                                   html, fixed = TRUE)
 
+  # Pipeline overview graph. Positions are computed here because React Flow
+  # does no layout of its own.
+  graph_json <- jsonlite::toJSON(build_dag_graph(targets_data), auto_unbox = TRUE)
+  graph_json <- gsub("</script>", "<\\/script>", graph_json, fixed = TRUE)
+  html <- gsub("{{GRAPH_JSON}}",    graph_json,                                   html, fixed = TRUE)
+
   out_path <- file.path(cfg$site_path, "viewer.html")
   writeLines(html, out_path, useBytes = TRUE)
   message("Viewer written: ", out_path)

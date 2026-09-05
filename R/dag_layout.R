@@ -132,6 +132,20 @@ build_dag_graph <- function(targets_data) {
     status <- if (nrow(mrow) == 0 || is.na(mrow$error[1])) "uptodate" else "errored"
     desc   <- if ("description" %in% names(frow)) chr1(frow$description) else ""
 
+    # Branching is read from the manifest's `pattern`, not from meta's
+    # `children`. A plain stem that a downstream pattern maps over also has
+    # children recorded against it, so `children` would report ordinary targets
+    # as branched. `pattern` is the target's own declaration and is available
+    # without a store.
+    pattern  <- if (nrow(frow)) chr1(frow$pattern) else ""
+    branched <- nzchar(pattern)
+    n_branch <- if (branched && nrow(mrow) && "children" %in% names(mrow)) {
+      kids <- mrow$children[[1]]
+      if (is.null(kids)) 0L else sum(!is.na(kids))
+    } else {
+      0L
+    }
+
     list(
       id          = nm,
       label       = nm,
@@ -140,6 +154,20 @@ build_dag_graph <- function(targets_data) {
       command     = if (nrow(frow)) chr1(frow$command) else "",
       last_built  = if (nrow(mrow)) chr1(as.character(mrow$time)) else "",
       error       = if (nrow(mrow)) chr1(mrow$error) else "",
+      warnings    = if (nrow(mrow) && "warnings" %in% names(mrow))
+                      chr1(mrow$warnings) else "",
+      pattern     = pattern,
+      branched    = branched,
+      n_branches  = n_branch,
+      type        = if (nrow(mrow) && "type" %in% names(mrow))
+                      chr1(mrow$type) else if (branched) "pattern" else "stem",
+      format      = if (nrow(frow)) chr1(frow$format) else "",
+      repository  = if (nrow(frow)) chr1(frow$repository) else "",
+      iteration   = if (nrow(frow)) chr1(frow$iteration) else "",
+      seconds     = if (nrow(mrow) && "seconds" %in% names(mrow) &&
+                        !is.na(mrow$seconds[1])) as.numeric(mrow$seconds[1]) else NA,
+      bytes       = if (nrow(mrow) && "bytes" %in% names(mrow) &&
+                        !is.na(mrow$bytes[1])) as.numeric(mrow$bytes[1]) else NA,
       upstream    = as.list(edges$from[edges$to   == nm]),
       downstream  = as.list(edges$to[edges$from == nm]),
       page        = paste0("targets/", nm, ".md"),

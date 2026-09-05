@@ -1,21 +1,18 @@
 # React Flow pipeline graph
 
-Working code, not a proposal, borrowed from
-[dplyneage](https://github.com/tgerke/dplyneage). Additive: `document_targets()`
-still produces exactly what it did before.
+The pipeline overview in `viewer.html` is now rendered with
+[React Flow](https://reactflow.dev) instead of mermaid. Clicking a target opens
+a detail panel; the standalone `generate_reactflow_graph()` page remains for a
+full-screen view.
+
+Borrowed from [dplyneage](https://github.com/tgerke/dplyneage), which renders
+column-level lineage the same way.
+
+![The viewer with the folded-in React Flow graph, showing branch counts on nodes and a detail panel](figures/viewer-folded-graph.png)
 
 ---
 
-## React Flow instead of mermaid
-
-`generate_reactflow_graph()` writes `reactflow_graph.html` — the target DAG as
-an interactive graph.
-
-![The target DAG rendered with React Flow: layered nodes with status colouring, minimap and zoom controls](figures/reactflow-graph.png)
-
-### Why
-
-mermaid is the single heaviest thing tardoc's viewer loads.
+## Why replace mermaid
 
 | Asset | Size |
 |---|---:|
@@ -26,100 +23,89 @@ mermaid is the single heaviest thing tardoc's viewer loads.
 | React Flow `style.css` | 9.0 KB |
 | **React Flow total** | **299.8 KB** |
 
-**11.6× smaller**, and the result is genuinely interactive: drag nodes, pan,
-zoom, minimap, per-node status colouring — rather than a static SVG inside the
-expand-modal the current viewer hand-rolls around mermaid.
+**11.6× smaller**, and genuinely interactive: drag nodes, pan, zoom, minimap,
+per-node status colouring.
 
-The generated page itself is 6.3 KB for the example pipeline.
+**mermaid is still loaded.** The per-target markdown pages embed ```mermaid
+fences for their local dependency graphs, and those still render. Only the
+overview graph changed. Dropping mermaid entirely means porting those too — see
+*Not done*.
 
-### The cost, stated plainly
+## What a node shows
 
-**React Flow does no layout.** Every node must arrive with an `(x, y)`. mermaid
-does that for you, and giving it up is the real price of the swap.
+Node bodies carry name, status, and a branch count when the target is branched.
+Clicking opens a panel with:
 
-It is a small price here because a targets pipeline is a layered DAG.
-`dag_layout()` assigns each node a column by longest-path depth from a root,
-stacks nodes within a column, and centres each column against the tallest. That
-is ~40 lines, and it is the same approach dplyneage uses in its
-`layout_positions()`.
+- **description** and the R **command**
+- **Branching** — the `pattern` expression, e.g. `map(files)` or
+  `cross(grid_a, grid_b)`
+- **error** and **warnings**, when present
+- **Details** — format, repository, iteration, last built, runtime, size
+- **Depends on** / **Feeds into** as clickable chips that move the panel to that
+  neighbour
+- **Open full page →**, which navigates the viewer to that target
 
-```r
-dag_layout(
-  nodes = c("a", "b", "c"),
-  edges = data.frame(from = c("a", "b"), to = c("b", "c"))
-)
-#>   name layer   x  y
-#> 1    a     0   0  0
-#> 2    b     1 220  0
-#> 3    c     2 440  0
-```
+Defaults are hidden. `repository: local` and `iteration: vector` are true of
+almost every target and would be noise on every panel, so they only appear when
+they differ.
 
-`build_dag_graph()` turns `load_targets_data()` output into the
-`{nodes, edges}` shape the page consumes.
+### Where the branching fields come from
 
-### One finding worth recording
+Checked against a real branched pipeline rather than assumed. `tar_manifest()`
+carries `pattern`, `format`, `repository`, `iteration`, `memory`, `storage`,
+`retrieval`, `deployment`, `priority`, `cue_*` and `packages`; `tar_meta()`
+carries `type`, `parent`, `children`, `bytes`, `seconds`, `warnings`, `error`.
 
-**Use React Flow v11, not v12.** The v12 UMD build's browser branch expects a
-`jsxRuntime` global:
+**One trap worth recording.** `meta$children` is *not* a branching signal.
+targets records branch names against a plain stem that a downstream pattern maps
+over, so a `grid_a` stem shows two children despite not being branched itself.
+The honest signal is `manifest$pattern` — the target's own declaration, and
+available even with no store. `meta$type == "pattern"` confirms it at runtime,
+and only then is `children` a branch count. There is a test pinning exactly this.
+
+## The cost
+
+**React Flow does no layout.** Every node must arrive with an `(x, y)`.
+`dag_layout()` assigns a column by longest-path depth from a root, stacks nodes
+within a column, and centres each column against the tallest — ~40 lines, the
+same approach dplyneage uses in `layout_positions()`.
+
+## Deep links
+
+`viewer.html` now reads and writes a location hash: `viewer.html#targets:clean`
+opens that target directly, and selecting a page records it. The first time a
+tardoc page has been linkable.
+
+## Use React Flow v11, not v12
+
+The v12 UMD's browser branch expects a `jsxRuntime` global:
 
 ```js
 t((e=globalThis).ReactFlow={}, e.jsxRuntime, e.React, e.ReactDOM)
 ```
 
-React 18's UMD build does not expose one (checked — no `jsxRuntime` in the
-bundle), so v12 needs a shim or a bundler. v11 asks only for `React` and
-`ReactDOM` and drops straight in.
+React 18's UMD does not expose one, so v12 needs a shim or a bundler. v11 asks
+only for `React` and `ReactDOM`. That is also why dplyneage ships its own 347 KB
+webpack bundle with React rolled in; tardoc does not need to.
 
-That is also why dplyneage ships its own 347 KB webpack bundle with React rolled
-in. tardoc doesn't need to: v11's UMD loads from CDN with subresource integrity,
-matching how `viewer.html` already loads mermaid and fuse.js.
+## Not done
 
-### Click a node to inspect it
-
-Clicking a node opens a panel with what you would otherwise have to go and look
-up:
-
-![The detail panel open on the clean target, showing its description, command, last build time and neighbours](figures/reactflow-click.png)
-
-- description and the R command that builds it
-- status and last build time, with the error when there is one
-- **Depends on** / **Feeds into** as clickable chips — clicking one moves the
-  panel to that neighbour, so you can walk the pipeline without leaving the graph
-- **Open full page →**, linking into the viewer
-
-Close with the × or Escape, or by clicking empty canvas.
-
-### Deep links into the viewer
-
-The panel's link only means something if the viewer can be told which page to
-open, so `viewer.html` now reads and writes a location hash:
-`viewer.html#targets:clean` opens that target directly, and clicking a page in
-the viewer records it in the hash so the URL can be shared or reloaded.
-
-That is useful on its own, independent of this graph — it is the first time any
-tardoc page has been directly linkable.
-
-Verified in a browser: deep link on load, `hashchange` while open, clicking a
-nav item writing the hash back, and a hash naming a target that does not exist
-falling back to the home panel rather than erroring.
-
-### Not done
-
-This is a **separate page**, not a replacement. `viewer.html` still uses mermaid
-for both the overview and the per-target graphs. Swapping it properly means
-porting the per-target local graphs and the expand modal too, and deciding
-whether to keep mermaid for the markdown pages, which embed ```mermaid fences.
+- The per-target local graphs in the markdown pages are still mermaid. Porting
+  them is what it would take to drop mermaid altogether and reclaim the 3.5 MB.
+- The graph draws targets only. `tar_network()` also returns function vertices,
+  which the old mermaid overview included.
 
 ---
 
 ## Reproducing
 
 ```r
-# React Flow graph for the bundled example pipeline
 setwd(system.file("examples/station-monitoring", package = "tardoc"))
 targets::tar_make()
-cfg <- build_site_config(".")
-generate_reactflow_graph(load_targets_data(cfg), cfg, "Station Monitoring Pipeline")
+tardoc::document_targets(pkg_name = "Station Monitoring Pipeline")
+tardoc::view_tardoc()
 ```
 
-Covered by `tests/testthat/test-dag_layout.R`.
+Covered by `tests/testthat/test-dag_layout.R`, including a branched fixture and
+a guard that the viewer keeps its navigation functions — an earlier edit deleted
+them when the React Flow block was inserted with the wrong boundary.

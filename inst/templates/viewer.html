@@ -13,6 +13,19 @@
 <script src="https://cdn.jsdelivr.net/npm/mermaid@11.17.2/dist/mermaid.min.js"
         integrity="sha384-EOXBFmc3gx5mb+vn0vPvvGqACToJD24hhacX5Yx+8NUUQrHIle/Qi5Bg9o3zKwW2"
         crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<link rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/reactflow@11.11.4/dist/style.css"
+      integrity="sha384-uySezIHhsCs2A2+GIarZ89Bi2gd6yjY0I1FFVamfrk6hgEUWLuBYlXA7bYr6dHaJ"
+      crossorigin="anonymous" referrerpolicy="no-referrer">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"
+        integrity="sha384-DGyLxAyjq0f9SPpVevD6IgztCFlnMF6oW/XQGmfe+IsZ8TqEiDrcHkMLKI6fiB/Z"
+        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"
+        integrity="sha384-gTGxhz21lVGYNMcdJOyq01Edg0jhn/c22nsx0kyqP0TxaV5WVdsSH1fSDUf5YJj1"
+        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script src="https://cdn.jsdelivr.net/npm/reactflow@11.11.4/dist/umd/index.js"
+        integrity="sha384-lA1w00Vex5qXDv4/xYJO/e8SCjfdlNghbTP+s+2zl37rCEAC7trsSRpYrv/JQy5y"
+        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script src="https://cdn.jsdelivr.net/npm/fuse.js@7.2.0/dist/fuse.min.js"
         integrity="sha384-fjX7DeaZ/XFhVUVbuJ4tJCCRWoC6LtyhHqvsNRsJBcfs1VksovPjnUUGM3+Ii9st"
         crossorigin="anonymous" referrerpolicy="no-referrer"></script>
@@ -74,6 +87,49 @@ a{color:#6d28d9;text-decoration:none}a:hover{text-decoration:underline}
          border:1px solid #313244;margin:16px 0;overflow-x:auto;
          width:100%;min-height:80px}
 .mermaid-wrap{position:relative;display:inline-block;width:100%}
+.graph-hint{color:#6c7086;font-size:12px;margin:-6px 0 10px}
+#rf-stage{position:relative;display:flex;height:min(62vh,560px);background:#1e1e2e;
+  border-radius:8px;overflow:hidden;border:1px solid #313244}
+#rf-graph{flex:1;min-width:0}
+#rf-panel{position:absolute;top:0;right:0;bottom:0;width:min(360px,88%);background:#181825;
+  border-left:1px solid #313244;padding:16px 18px 22px;overflow-y:auto;z-index:6;
+  box-shadow:-8px 0 24px rgba(0,0,0,.35)}
+#rf-panel[hidden]{display:none}
+#rf-panel .close{position:absolute;top:10px;right:12px;background:none;border:none;
+  color:#6c7086;font-size:20px;cursor:pointer;line-height:1}
+#rf-panel .close:hover{color:#cdd6f4}
+#rf-panel h3{margin:0 0 4px;font-size:16px;color:#cdd6f4}
+#rf-panel .tags{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px}
+#rf-panel .tag{font-size:10px;padding:2px 7px;border-radius:9px;background:#313244;color:#9399b2}
+#rf-panel .tag.uptodate{color:#a6e3a1}
+#rf-panel .tag.errored{color:#f38ba8}
+#rf-panel .tag.branched{color:#f9e2af}
+#rf-panel h4{font-size:10px;text-transform:uppercase;letter-spacing:.09em;color:#6c7086;
+  margin:14px 0 5px;font-weight:600}
+#rf-panel p{margin:0;font-size:13px;color:#cdd6f4}
+#rf-panel pre{margin:0;background:#11111b;border:1px solid #313244;border-radius:5px;
+  padding:8px 10px;font-size:11.5px;line-height:1.5;overflow-x:auto;white-space:pre-wrap;
+  word-break:break-word;color:#cdd6f4}
+#rf-panel .kv{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;font-size:12px;color:#cdd6f4}
+#rf-panel .kv span:nth-child(odd){color:#6c7086}
+#rf-panel .chips{display:flex;flex-wrap:wrap;gap:5px}
+#rf-panel .chip{background:#313244;border:1px solid transparent;border-radius:5px;
+  padding:3px 8px;font-size:12px;color:#cdd6f4;cursor:pointer}
+#rf-panel .chip:hover{border-color:#a78bfa;color:#a78bfa}
+#rf-panel .none{color:#6c7086;font-style:italic;font-size:12px}
+#rf-panel .open{display:inline-block;margin-top:16px;padding:7px 13px;border-radius:6px;
+  background:#6d28d9;color:#fff;border:none;font-size:13px;cursor:pointer;font-weight:500}
+#rf-panel .open:hover{background:#a78bfa;color:#1e1e2e}
+.tnode{background:#313244;border:1px solid #45475a;border-radius:6px;padding:7px 11px;
+  min-width:132px;color:#cdd6f4;font-size:12.5px;line-height:1.35;cursor:pointer}
+.tnode:hover{border-color:#a78bfa}
+.tnode.errored{border-color:#f38ba8}
+.tnode .nm{font-weight:600}
+.tnode .st{font-size:10.5px;color:#6c7086;margin-top:2px}
+.tnode.uptodate .st{color:#a6e3a1}
+.tnode.errored .st{color:#f38ba8}
+.tnode .br{font-size:10px;color:#f9e2af;margin-top:1px}
+.react-flow__node.selected .tnode{border-color:#a78bfa}
 .mermaid-expand-btn{position:absolute;top:8px;right:8px;background:#6d28d9;color:#fff;
                      border:none;border-radius:4px;padding:3px 10px;font-size:11px;
                      cursor:pointer;opacity:0.8;z-index:10}
@@ -147,12 +203,10 @@ a{color:#6d28d9;text-decoration:none}a:hover{text-decoration:underline}
         </div>
       </div>
       <h2>Pipeline overview</h2>
-      <div class="mermaid-wrap">
-        <div id="overall-mermaid" class="mermaid"></div>
-        <button class="mermaid-expand-btn" id="overview-expand-btn"
-                onclick="expandMermaid(document.getElementById('overall-mermaid').getAttribute('data-src'))">
-          &#x26F6; Expand
-        </button>
+      <p class="graph-hint">Click a target for details &middot; drag to pan &middot; scroll to zoom</p>
+      <div id="rf-stage">
+        <div id="rf-graph"></div>
+        <aside id="rf-panel" hidden aria-label="Target details"></aside>
       </div>
     </div>
     <div id="page-content" style="display:none"></div>
@@ -178,6 +232,7 @@ a{color:#6d28d9;text-decoration:none}a:hover{text-decoration:underline}
 const PAGES    = {{PAGES_JSON}};
 const INDEX    = {{INDEX_JSON}};
 const PKG_NAME = {{PKG_NAME_JSON}};
+const GRAPH    = {{GRAPH_JSON}};
 
 const PAGE_MAP = {};
 PAGES.forEach(p => { PAGE_MAP[p.type + ':' + p.name] = p; });
@@ -195,25 +250,141 @@ document.getElementById('stat-functions').textContent = functions.length;
 document.getElementById('stat-status').textContent    =
   targets.filter(t => t.status === 'uptodate').length;
 
-// Build overall pipeline mermaid
-const allEdges = new Set();
-targets.forEach(t => {
-  (t.upstream   || []).forEach(u => allEdges.add(u + ' --> ' + t.name));
-  (t.downstream || []).forEach(d => allEdges.add(t.name + ' --> ' + d));
-});
-const overallEl = document.getElementById('overall-mermaid');
-if (allEdges.size > 0 && allEdges.size < 200) {
-  const src = "%%{init:{'theme':'dark','themeVariables':{'lineColor':'#a6adc8','edgeLabelBackground':'#1e1e2e'}}}%%\ngraph LR\n    " +
-              [...allEdges].join('\n    ');
-  overallEl.textContent = src;
-  overallEl.setAttribute('data-src', src);
-  mermaid.run({nodes: [overallEl]});
-} else {
-  document.getElementById('overview-expand-btn').style.display = 'none';
-  if (allEdges.size >= 200) {
-    overallEl.innerHTML = '<p style="color:#6c7086;font-style:italic">Pipeline too large to render inline.</p>';
-  }
+// ---- pipeline overview: React Flow ---------------------------------------
+// GRAPH carries positions computed by dag_layout() in R, because React Flow
+// does no layout of its own. mermaid is still loaded: the per-target markdown
+// pages embed ```mermaid fences for their local dependency graphs.
+const RFC = window.ReactFlow;
+const rce = React.createElement;
+const RF_BY_ID = {};
+(GRAPH.nodes || []).forEach(function (n) { RF_BY_ID[n.id] = n; });
+
+function rfEsc(t) {
+  return String(t == null ? '' : t)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }
+
+function fmtBytes(b) {
+  if (b == null || isNaN(b)) return null;
+  const u = ['B', 'kB', 'MB', 'GB'];
+  let i = 0, v = Number(b);
+  while (v >= 1024 && i < u.length - 1) { v /= 1024; i++; }
+  return (i === 0 ? v : v.toFixed(1)) + ' ' + u[i];
+}
+
+function fmtSecs(sc) {
+  if (sc == null || isNaN(sc)) return null;
+  const v = Number(sc);
+  return v < 1 ? Math.round(v * 1000) + ' ms' : v.toFixed(2) + ' s';
+}
+
+function rfChips(list) {
+  if (!list || !list.length) return '<p class="none">none</p>';
+  return '<div class="chips">' + list.map(function (n) {
+    return '<button class="chip" data-goto="' + rfEsc(n) + '">' + rfEsc(n) + '</button>';
+  }).join('') + '</div>';
+}
+
+function rfClose() { document.getElementById('rf-panel').hidden = true; }
+
+function rfOpen(id) {
+  const n = RF_BY_ID[id];
+  if (!n) return;
+  const rfPanel = document.getElementById('rf-panel');
+
+  // Only surface facts that carry information. "iteration: vector" and
+  // "repository: local" are the defaults and would be noise on every target.
+  const kv = [];
+  if (n.format) kv.push(['Format', n.format]);
+  if (n.repository && n.repository !== 'local') kv.push(['Repository', n.repository]);
+  if (n.iteration && n.iteration !== 'vector')  kv.push(['Iteration', n.iteration]);
+  if (n.last_built) kv.push(['Last built', n.last_built]);
+  const secs = fmtSecs(n.seconds); if (secs) kv.push(['Runtime', secs]);
+  const size = fmtBytes(n.bytes);  if (size) kv.push(['Size', size]);
+
+  const tags = ['<span class="tag ' + rfEsc(n.status) + '">' + rfEsc(n.status) + '</span>'];
+  if (n.branched) {
+    tags.push('<span class="tag branched">' +
+      (n.n_branches ? n.n_branches + ' branches' : 'branched') + '</span>');
+  }
+
+  rfPanel.innerHTML =
+    '<button class="close" aria-label="Close">&times;</button>' +
+    '<h3>' + rfEsc(n.label) + '</h3>' +
+    '<div class="tags">' + tags.join('') + '</div>' +
+    (n.description ? '<h4>Description</h4><p>' + rfEsc(n.description) + '</p>'
+                   : '<p class="none">no description</p>') +
+    (n.branched ? '<h4>Branching</h4><pre>' + rfEsc(n.pattern) + '</pre>' : '') +
+    (n.command ? '<h4>Command</h4><pre>' + rfEsc(n.command) + '</pre>' : '') +
+    (n.error    ? '<h4>Error</h4><pre>' + rfEsc(n.error) + '</pre>' : '') +
+    (n.warnings ? '<h4>Warnings</h4><pre>' + rfEsc(n.warnings) + '</pre>' : '') +
+    (kv.length ? '<h4>Details</h4><div class="kv">' + kv.map(function (p) {
+        return '<span>' + rfEsc(p[0]) + '</span><span>' + rfEsc(p[1]) + '</span>';
+      }).join('') + '</div>' : '') +
+    '<h4>Depends on</h4>' + rfChips(n.upstream) +
+    '<h4>Feeds into</h4>' + rfChips(n.downstream) +
+    '<button class="open">Open full page &rarr;</button>';
+
+  rfPanel.hidden = false;
+  rfPanel.querySelector('.close').onclick = rfClose;
+  rfPanel.querySelectorAll('[data-goto]').forEach(function (b) {
+    b.onclick = function () { rfOpen(b.getAttribute('data-goto')); };
+  });
+  rfPanel.querySelector('.open').onclick = function () {
+    rfClose();
+    showTab('targets');
+    loadPage('targets', n.id);
+  };
+  rfPanel.scrollTop = 0;
+}
+
+document.addEventListener('keydown', function (ev) {
+  if (ev.key === 'Escape') rfClose();
+});
+
+if (GRAPH.nodes && GRAPH.nodes.length) {
+  const rfNodes = GRAPH.nodes.map(function (n) {
+    const kids = [rce('div', { className: 'nm' }, n.label),
+                  rce('div', { className: 'st' }, n.status)];
+    if (n.branched) {
+      kids.push(rce('div', { className: 'br' },
+        n.n_branches ? n.n_branches + ' branches' : 'branched'));
+    }
+    return {
+      id: n.id,
+      position: { x: n.x, y: n.y },
+      data: { label: rce.apply(null, ['div', { className: 'tnode ' + n.status }].concat(kids)) },
+      sourcePosition: RFC.Position.Right,
+      targetPosition: RFC.Position.Left,
+      style: { background: 'transparent', border: 'none', padding: 0, width: 'auto' }
+    };
+  });
+  const rfEdges = GRAPH.edges.map(function (d) {
+    return { id: d.id, source: d.source, target: d.target,
+             style: { stroke: '#a6adc8', strokeWidth: 1.5 },
+             markerEnd: { type: RFC.MarkerType.ArrowClosed, color: '#a6adc8' } };
+  });
+  const RFlow = RFC.ReactFlow || RFC.default;
+  ReactDOM.createRoot(document.getElementById('rf-graph')).render(
+    rce(RFlow, {
+      defaultNodes: rfNodes, defaultEdges: rfEdges,
+      fitView: true, fitViewOptions: { padding: 0.15 }, minZoom: 0.1,
+      onNodeClick: function (_ev, node) { rfOpen(node.id); },
+      onPaneClick: rfClose
+    },
+      rce(RFC.Background, { color: '#313244', gap: 16 }),
+      rce(RFC.Controls, null),
+      rce(RFC.MiniMap, { pannable: true, zoomable: true,
+        style: { background: '#181825' }, maskColor: 'rgba(30,30,46,0.75)',
+        nodeColor: function () { return '#45475a'; } })
+    )
+  );
+} else {
+  document.getElementById('rf-stage').innerHTML =
+    '<p style="color:#6c7086;font-style:italic;padding:20px">No targets to graph.</p>';
+}
+
 
 let currentTab = 'targets';
 let currentKey = null;
