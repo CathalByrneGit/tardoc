@@ -4,21 +4,26 @@
 \alias{build_dag_graph}
 \title{Build the node and edge lists a React Flow graph needs}
 \usage{
-build_dag_graph(targets_data)
+build_dag_graph(targets_data, include_functions = TRUE)
 }
 \arguments{
 \item{targets_data}{Output of \code{\link[=load_targets_data]{load_targets_data()}}.}
+
+\item{include_functions}{Logical. Include function vertices as nodes.
+\code{tar_network()} reports the functions a target calls, and the viewer can
+toggle them.}
 }
 \value{
 A list with \code{nodes} and \code{edges}.
 }
 \description{
-Turns \code{targets_data} into the \verb{\{nodes, edges\}} shape the React Flow viewer
+Turns \code{targets_data} into the \verb{\{nodes, edges\}} shape the viewer's graph
 consumes, with positions already assigned by \code{\link[=dag_layout]{dag_layout()}}.
 }
 \details{
-Each node carries enough detail for the graph page to show a panel when it is
-clicked -- description, command, status, build time, immediate neighbours,
-and a deep link into the viewer -- so a reader can inspect a target without
-leaving the graph.
+Nodes come from \code{tar_network()}'s vertices, which already carry \code{type}
+(\code{stem} / \code{pattern} / \code{function}), a branch count, runtime and size. They are
+enriched from the manifest (command, branching pattern, storage settings) and
+the metadata (errors, warnings, build time) so a reader can inspect a target
+without leaving the graph.
 }

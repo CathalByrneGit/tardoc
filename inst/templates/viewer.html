@@ -10,9 +10,6 @@
 <script src="https://cdn.jsdelivr.net/npm/marked@15.0.12/marked.min.js"
         integrity="sha384-948ahk4ZmxYVYOc+rxN1H2gM1EJ2Duhp7uHtZ4WSLkV4Vtx5MUqnV+l7u9B+jFv+"
         crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-<script src="https://cdn.jsdelivr.net/npm/mermaid@11.17.2/dist/mermaid.min.js"
-        integrity="sha384-EOXBFmc3gx5mb+vn0vPvvGqACToJD24hhacX5Yx+8NUUQrHIle/Qi5Bg9o3zKwW2"
-        crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <link rel="stylesheet"
       href="https://cdn.jsdelivr.net/npm/reactflow@11.11.4/dist/style.css"
       integrity="sha384-uySezIHhsCs2A2+GIarZ89Bi2gd6yjY0I1FFVamfrk6hgEUWLuBYlXA7bYr6dHaJ"
@@ -83,11 +80,14 @@ td{padding:8px 12px;border:1px solid #dee2e6}
 blockquote{border-left:4px solid #cba6f7;padding:8px 16px;
            background:#f5f3ff;margin:16px 0;color:#4c1d95;border-radius:0 6px 6px 0}
 a{color:#6d28d9;text-decoration:none}a:hover{text-decoration:underline}
-.mermaid{background:#1e1e2e;padding:20px;border-radius:8px;
-         border:1px solid #313244;margin:16px 0;overflow-x:auto;
-         width:100%;min-height:80px}
-.mermaid-wrap{position:relative;display:inline-block;width:100%}
+.local-graph{height:260px;background:#1e1e2e;border:1px solid #313244;
+             border-radius:8px;margin:16px 0}
+.tnode.centre{border-color:#6d28d9;background:#3b2d63}
+.tnode.function{border-style:dashed}
+.tnode.function .st{color:#89b4fa}
 .graph-hint{color:#6c7086;font-size:12px;margin:-6px 0 10px}
+.fn-toggle{margin-left:14px;cursor:pointer;user-select:none}
+.fn-toggle input{vertical-align:-1px;margin-right:4px;cursor:pointer}
 #rf-stage{position:relative;display:flex;height:min(62vh,560px);background:#1e1e2e;
   border-radius:8px;overflow:hidden;border:1px solid #313244}
 #rf-graph{flex:1;min-width:0}
@@ -130,31 +130,6 @@ a{color:#6d28d9;text-decoration:none}a:hover{text-decoration:underline}
 .tnode.errored .st{color:#f38ba8}
 .tnode .br{font-size:10px;color:#f9e2af;margin-top:1px}
 .react-flow__node.selected .tnode{border-color:#a78bfa}
-.mermaid-expand-btn{position:absolute;top:8px;right:8px;background:#6d28d9;color:#fff;
-                     border:none;border-radius:4px;padding:3px 10px;font-size:11px;
-                     cursor:pointer;opacity:0.8;z-index:10}
-.mermaid-expand-btn:hover{opacity:1}
-#mermaid-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);
-               z-index:9999;align-items:center;justify-content:center}
-#mermaid-modal.open{display:flex}
-#mermaid-modal-inner{background:#1e1e2e;border-radius:10px;
-                     width:90vw;height:85vh;position:relative;
-                     overflow:hidden;display:flex;flex-direction:column}
-#mermaid-modal-close{position:absolute;top:8px;right:12px;background:none;
-                     border:none;font-size:18px;cursor:pointer;color:#6c7086;
-                     z-index:10;line-height:1}
-#mermaid-modal-toolbar{position:absolute;top:8px;left:50%;transform:translateX(-50%);
-                        display:flex;gap:6px;z-index:10;
-                        background:rgba(0,0,0,.5);padding:4px 8px;border-radius:20px}
-.pz-btn{background:none;border:1px solid rgba(255,255,255,.3);color:#cdd6f4;
-          border-radius:4px;padding:4px 12px;cursor:pointer;font-size:13px;font-weight:500}
-.pz-btn:hover{background:rgba(255,255,255,.15)}
-#mermaid-modal-content{flex:1;overflow:hidden;cursor:grab;position:relative;
-                        margin-top:40px;user-select:none}
-#mermaid-modal-content.dragging{cursor:grabbing}
-#mermaid-modal-content .mermaid{background:transparent;border:none;
-                                   padding:0;position:absolute;
-                                   transform-origin:0 0}
 .notes-section{margin-top:32px;padding:20px 24px;background:#fffbf0;
                border:1px solid #fde68a;border-radius:8px}
 .notes-section h2{font-size:16px;color:#92400e;margin-bottom:12px;margin-top:0}
@@ -203,28 +178,15 @@ a{color:#6d28d9;text-decoration:none}a:hover{text-decoration:underline}
         </div>
       </div>
       <h2>Pipeline overview</h2>
-      <p class="graph-hint">Click a target for details &middot; drag to pan &middot; scroll to zoom</p>
+      <p class="graph-hint">Click a node for details &middot; drag to pan &middot; scroll to zoom
+        <label class="fn-toggle"><input type="checkbox" id="show-functions"> show functions</label>
+      </p>
       <div id="rf-stage">
         <div id="rf-graph"></div>
         <aside id="rf-panel" hidden aria-label="Target details"></aside>
       </div>
     </div>
     <div id="page-content" style="display:none"></div>
-  </div>
-</div>
-
-<!-- Mermaid fullscreen modal -->
-<div id="mermaid-modal" onclick="if(event.target===this)closeMermaid()">
-  <div id="mermaid-modal-inner">
-    <button id="mermaid-modal-close" onclick="closeMermaid()">&#10005;</button>
-    <div id="mermaid-modal-toolbar">
-      <button class="pz-btn" onclick="pzZoom(-0.2)">&#8722;</button>
-      <button class="pz-btn" onclick="pzFit()">&#x2922; Fit</button>
-      <button class="pz-btn" onclick="pzZoom(0.2)">&#43;</button>
-    </div>
-    <div id="mermaid-modal-content">
-      <div id="mermaid-modal-diagram" class="mermaid"></div>
-    </div>
   </div>
 </div>
 
@@ -236,9 +198,6 @@ const GRAPH    = {{GRAPH_JSON}};
 
 const PAGE_MAP = {};
 PAGES.forEach(p => { PAGE_MAP[p.type + ':' + p.name] = p; });
-
-mermaid.initialize({startOnLoad: false, theme: 'default',
-  themeVariables: {fontSize: '14px'}});
 
 document.getElementById('site-title').textContent = PKG_NAME;
 document.getElementById('home-title').textContent = PKG_NAME;
@@ -252,8 +211,9 @@ document.getElementById('stat-status').textContent    =
 
 // ---- pipeline overview: React Flow ---------------------------------------
 // GRAPH carries positions computed by dag_layout() in R, because React Flow
-// does no layout of its own. mermaid is still loaded: the per-target markdown
-// pages embed ```mermaid fences for their local dependency graphs.
+// does no layout of its own. mermaid is no longer loaded at all: the per-target
+// pages keep their ```mermaid fence so the .md files stay portable, and this
+// viewer replaces each fence with renderLocalGraph() below.
 const RFC = window.ReactFlow;
 const rce = React.createElement;
 const RF_BY_ID = {};
@@ -343,10 +303,83 @@ document.addEventListener('keydown', function (ev) {
   if (ev.key === 'Escape') rfClose();
 });
 
-if (GRAPH.nodes && GRAPH.nodes.length) {
-  const rfNodes = GRAPH.nodes.map(function (n) {
+// A target and its immediate neighbours, standing in for the mermaid fence on
+// each target page. Built from GRAPH -- the same data the fence came from --
+// rather than by parsing mermaid syntax.
+function renderLocalGraph(host, centre) {
+  const node = RF_BY_ID[centre];
+  if (!node) { host.remove(); return; }
+  const ups = (node.upstream   || []).filter(function (n) { return RF_BY_ID[n]; });
+  const dns = (node.downstream || []).filter(function (n) { return RF_BY_ID[n]; });
+  if (!ups.length && !dns.length) { host.remove(); return; }
+
+  const tallest = Math.max(ups.length, dns.length, 1);
+  const place = [];
+  ups.forEach(function (n, i) {
+    place.push([n, 0, (i + (tallest - ups.length) / 2) * 80]);
+  });
+  place.push([centre, 250, ((tallest - 1) / 2) * 80]);
+  dns.forEach(function (n, i) {
+    place.push([n, 500, (i + (tallest - dns.length) / 2) * 80]);
+  });
+
+  const lnodes = place.map(function (p) {
+    const n = RF_BY_ID[p[0]];
+    const cls = 'tnode ' + n.status + ' ' + (n.kind || 'stem') +
+                (n.id === centre ? ' centre' : '');
+    return {
+      id: n.id,
+      position: { x: p[1], y: p[2] },
+      data: { label: rce('div', { className: cls },
+        rce('div', { className: 'nm' }, n.label),
+        rce('div', { className: 'st' },
+            n.kind === 'function' ? 'function' : n.status)) },
+      sourcePosition: RFC.Position.Right,
+      targetPosition: RFC.Position.Left,
+      style: { background: 'transparent', border: 'none', padding: 0, width: 'auto' }
+    };
+  });
+
+  const ids = {}; lnodes.forEach(function (n) { ids[n.id] = 1; });
+  const ledges = (GRAPH.edges || []).filter(function (d) {
+    return ids[d.source] && ids[d.target];
+  }).map(function (d) {
+    return { id: 'l-' + d.id, source: d.source, target: d.target,
+             style: { stroke: '#a6adc8', strokeWidth: 1.5 },
+             markerEnd: { type: RFC.MarkerType.ArrowClosed, color: '#a6adc8' } };
+  });
+
+  const RFlow = RFC.ReactFlow || RFC.default;
+  ReactDOM.createRoot(host).render(
+    rce(RFlow, {
+      defaultNodes: lnodes, defaultEdges: ledges,
+      fitView: true, fitViewOptions: { padding: 0.2 },
+      minZoom: 0.2, nodesDraggable: false,
+      onNodeClick: function (_ev, n) {
+        const t = RF_BY_ID[n.id];
+        if (!t || t.id === centre) return;
+        const type = t.kind === 'function' ? 'functions' : 'targets';
+        showTab(type);
+        loadPage(type, n.id);
+      }
+    }, rce(RFC.Background, { color: '#313244', gap: 16 }))
+  );
+}
+
+let rfRoot = null;
+
+// Functions are hidden by default: on a large pipeline they roughly double the
+// node count and the targets are what a reader is usually after.
+function renderOverview(showFunctions) {
+  const visible = GRAPH.nodes.filter(function (n) {
+    return showFunctions || n.kind !== 'function';
+  });
+  const ids = {}; visible.forEach(function (n) { ids[n.id] = 1; });
+
+  const rfNodes = visible.map(function (n) {
     const kids = [rce('div', { className: 'nm' }, n.label),
-                  rce('div', { className: 'st' }, n.status)];
+                  rce('div', { className: 'st' },
+                      n.kind === 'function' ? 'function' : n.status)];
     if (n.branched) {
       kids.push(rce('div', { className: 'br' },
         n.n_branches ? n.n_branches + ' branches' : 'branched'));
@@ -354,22 +387,28 @@ if (GRAPH.nodes && GRAPH.nodes.length) {
     return {
       id: n.id,
       position: { x: n.x, y: n.y },
-      data: { label: rce.apply(null, ['div', { className: 'tnode ' + n.status }].concat(kids)) },
+      data: { label: rce.apply(null,
+        ['div', { className: 'tnode ' + n.status + ' ' + (n.kind || 'stem') }].concat(kids)) },
       sourcePosition: RFC.Position.Right,
       targetPosition: RFC.Position.Left,
       style: { background: 'transparent', border: 'none', padding: 0, width: 'auto' }
     };
   });
-  const rfEdges = GRAPH.edges.map(function (d) {
-    return { id: d.id, source: d.source, target: d.target,
-             style: { stroke: '#a6adc8', strokeWidth: 1.5 },
-             markerEnd: { type: RFC.MarkerType.ArrowClosed, color: '#a6adc8' } };
-  });
+  const rfEdges = (GRAPH.edges || [])
+    .filter(function (d) { return ids[d.source] && ids[d.target]; })
+    .map(function (d) {
+      return { id: d.id, source: d.source, target: d.target,
+               style: { stroke: '#a6adc8', strokeWidth: 1.5 },
+               markerEnd: { type: RFC.MarkerType.ArrowClosed, color: '#a6adc8' } };
+    });
+
   const RFlow = RFC.ReactFlow || RFC.default;
-  ReactDOM.createRoot(document.getElementById('rf-graph')).render(
+  if (!rfRoot) rfRoot = ReactDOM.createRoot(document.getElementById('rf-graph'));
+  rfRoot.render(
     rce(RFlow, {
-      defaultNodes: rfNodes, defaultEdges: rfEdges,
+      nodes: rfNodes, edges: rfEdges,
       fitView: true, fitViewOptions: { padding: 0.15 }, minZoom: 0.1,
+      nodesDraggable: true,
       onNodeClick: function (_ev, node) { rfOpen(node.id); },
       onPaneClick: rfClose
     },
@@ -380,6 +419,20 @@ if (GRAPH.nodes && GRAPH.nodes.length) {
         nodeColor: function () { return '#45475a'; } })
     )
   );
+}
+
+if (GRAPH.nodes && GRAPH.nodes.length) {
+  renderOverview(false);
+  const fnBox = document.getElementById('show-functions');
+  const anyFn = GRAPH.nodes.some(function (n) { return n.kind === 'function'; });
+  if (!anyFn) {
+    fnBox.closest('.fn-toggle').style.display = 'none';
+  } else {
+    fnBox.addEventListener('change', function () {
+      rfClose();
+      renderOverview(fnBox.checked);
+    });
+  }
 } else {
   document.getElementById('rf-stage').innerHTML =
     '<p style="color:#6c7086;font-style:italic;padding:20px">No targets to graph.</p>';
@@ -448,24 +501,16 @@ function loadPage(type, name) {
     ? marked.parse(page.content)
     : '<div class="no-content">No content found.</div>';
 
-  // Render mermaid diagrams, then inject expand buttons after a short delay
-  mermaid.run({nodes: contentEl.querySelectorAll('.language-mermaid')});
-  setTimeout(() => {
-    contentEl.querySelectorAll('.mermaid').forEach(el => {
-      if (el.closest('#mermaid-modal') || el.closest('.mermaid-wrap')) return;
-      const src = el.getAttribute('data-src') || el.textContent || '';
-      el.setAttribute('data-src', src);
-      const wrap = document.createElement('div');
-      wrap.className = 'mermaid-wrap';
-      const btn = document.createElement('button');
-      btn.className = 'mermaid-expand-btn';
-      btn.textContent = '\u26F6 Expand';
-      btn.onclick = () => expandMermaid(src);
-      el.parentNode.insertBefore(wrap, el);
-      wrap.appendChild(el);
-      wrap.appendChild(btn);
-    });
-  }, 400);
+  // The markdown keeps its ```mermaid fence so the .md files stay portable
+  // (GitHub renders them). The viewer no longer loads mermaid: it replaces each
+  // fence with a React Flow graph built from GRAPH, the same data the fence was
+  // generated from.
+  contentEl.querySelectorAll('pre > code.language-mermaid').forEach(function (code) {
+    const host = document.createElement('div');
+    host.className = 'local-graph';
+    code.parentNode.replaceWith(host);
+    renderLocalGraph(host, name);
+  });
 
   // Intercept .md links — route through loadPage
   contentEl.querySelectorAll('a').forEach(a => {
@@ -506,87 +551,6 @@ function goHome() {
 
 // Pan/zoom state
 let pzScale = 1, pzTx = 0, pzTy = 0, pzPanning = false, pzX0 = 0, pzY0 = 0;
-
-function pzApply() {
-  const el = document.getElementById('mermaid-modal-diagram');
-  if (el) el.style.transform = `translate(${pzTx}px,${pzTy}px) scale(${pzScale})`;
-}
-
-function pzFit() {
-  const el  = document.getElementById('mermaid-modal-diagram');
-  const svg = el && el.querySelector('svg');
-  const vp  = document.getElementById('mermaid-modal-content');
-  if (!svg || !vp) return;
-  const sw = svg.getBoundingClientRect().width  / pzScale;
-  const sh = svg.getBoundingClientRect().height / pzScale;
-  const vw = vp.clientWidth  - 40;
-  const vh = vp.clientHeight - 40;
-  pzScale = Math.min(vw / sw, vh / sh, 2);
-  pzTx = (vp.clientWidth  - sw * pzScale) / 2;
-  pzTy = (vp.clientHeight - sh * pzScale) / 2;
-  pzApply();
-}
-
-function pzZoom(delta) {
-  const vp = document.getElementById('mermaid-modal-content');
-  const cx = vp ? vp.clientWidth  / 2 : 0;
-  const cy = vp ? vp.clientHeight / 2 : 0;
-  const newScale = Math.max(0.2, Math.min(8, pzScale + delta));
-  const factor   = newScale / pzScale;
-  pzTx = cx - (cx - pzTx) * factor;
-  pzTy = cy - (cy - pzTy) * factor;
-  pzScale = newScale;
-  pzApply();
-}
-
-function expandMermaid(src) {
-  pzScale = 1; pzTx = 0; pzTy = 0;
-  const diag = document.getElementById('mermaid-modal-diagram');
-  diag.removeAttribute('data-processed');
-  diag.textContent = src;
-  document.getElementById('mermaid-modal').classList.add('open');
-  mermaid.run({nodes: [diag]});
-  setTimeout(pzFit, 300);
-}
-
-function closeMermaid() {
-  document.getElementById('mermaid-modal').classList.remove('open');
-}
-
-// Pan events on modal content
-(function() {
-  const vp = document.getElementById('mermaid-modal-content');
-  if (!vp) return;
-  vp.addEventListener('mousedown', e => {
-    if (e.button !== 0) return;
-    pzPanning = true; pzX0 = e.clientX - pzTx; pzY0 = e.clientY - pzTy;
-    vp.classList.add('dragging');
-  });
-  window.addEventListener('mousemove', e => {
-    if (!pzPanning) return;
-    pzTx = e.clientX - pzX0; pzTy = e.clientY - pzY0;
-    pzApply();
-  });
-  window.addEventListener('mouseup', () => {
-    pzPanning = false;
-    document.getElementById('mermaid-modal-content')?.classList.remove('dragging');
-  });
-  vp.addEventListener('wheel', e => {
-    e.preventDefault();
-    const rect = vp.getBoundingClientRect();
-    const mx = e.clientX - rect.left;
-    const my = e.clientY - rect.top;
-    const delta = e.deltaY < 0 ? 0.15 : -0.15;
-    const newScale = Math.max(0.2, Math.min(8, pzScale + delta));
-    const factor   = newScale / pzScale;
-    pzTx = mx - (mx - pzTx) * factor;
-    pzTy = my - (my - pzTy) * factor;
-    pzScale = newScale;
-    pzApply();
-  }, {passive: false});
-})();
-
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeMermaid(); });
 
 // Deep linking: #targets:<name> or #functions:<name>.
 function openFromHash() {

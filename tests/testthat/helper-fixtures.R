@@ -103,8 +103,12 @@ mock_branched_data <- function() {
     )
   )
   network <- list(
-    vertices = dplyr::tibble(name = manifest$name, type = "stem",
-                             status = "uptodate", color = "grey"),
+    vertices = dplyr::tibble(
+      name     = manifest$name,
+      type     = c("stem", "pattern", "pattern", "stem"),
+      status   = "uptodate",
+      branches = c(NA, 3, 4, NA)   # as tar_network() reports it
+    ),
     edges = dplyr::tibble(from = c("files", "chunk", "combos"),
                           to   = c("chunk", "combos", "summary_all"))
   )

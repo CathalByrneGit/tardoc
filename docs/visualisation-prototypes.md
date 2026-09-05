@@ -26,10 +26,15 @@ column-level lineage the same way.
 **11.6× smaller**, and genuinely interactive: drag nodes, pan, zoom, minimap,
 per-node status colouring.
 
-**mermaid is still loaded.** The per-target markdown pages embed ```mermaid
-fences for their local dependency graphs, and those still render. Only the
-overview graph changed. Dropping mermaid entirely means porting those too — see
-*Not done*.
+**mermaid is no longer loaded at all.** The per-target pages still carry a
+```mermaid fence, so the generated `.md` files render on GitHub and anywhere
+else markdown is read — that portability was worth keeping. The viewer ignores
+the fence's contents and replaces it with a React Flow graph built from the same
+data:
+
+![A target page: the mermaid fence replaced by a live local graph, with the centre target highlighted and a function node dashed](figures/viewer-local-graph.png)
+
+So the full 3,488.9 KB is reclaimed, and the `.md` files lose nothing.
 
 ## What a node shows
 
@@ -88,12 +93,34 @@ React 18's UMD does not expose one, so v12 needs a shim or a bundler. v11 asks
 only for `React` and `ReactDOM`. That is also why dplyneage ships its own 347 KB
 webpack bundle with React rolled in; tardoc does not need to.
 
+## Function vertices
+
+`tar_network()` returns the functions each target calls as vertices in their own
+right, and they are now drawn — dashed border, blue label — behind a **show
+functions** checkbox on the overview. Hidden by default: on a large pipeline
+they roughly double the node count, and the targets are usually what a reader is
+after. Clicking one opens its function page.
+
+`build_dag_graph(include_functions = FALSE)` drops them server-side, and drops
+any edge that referenced them.
+
+## Where the node data comes from
+
+`tar_network()`'s vertices turned out to be a better source than joining the
+manifest and metadata by hand: they already carry `type` (`stem` / `pattern` /
+`function`), a branch count, runtime and size. The manifest supplies the command,
+branching pattern and storage settings; the metadata supplies errors, warnings
+and build time.
+
+Verified against a store-less pipeline: `tar_network()` still reports vertex
+`type`, so branching is known without a store, but `branches`, `seconds` and
+`bytes` come back `NA` because those live in the store. There is a test for it.
+
 ## Not done
 
-- The per-target local graphs in the markdown pages are still mermaid. Porting
-  them is what it would take to drop mermaid altogether and reclaim the 3.5 MB.
-- The graph draws targets only. `tar_network()` also returns function vertices,
-  which the old mermaid overview included.
+- The overview lays out functions with the same layered algorithm as targets,
+  which spreads them across columns. Pinning each function next to the target it
+  feeds would read better.
 
 ---
 

@@ -56,7 +56,8 @@ test_that("a cyclic edge list terminates instead of looping forever", {
 test_that("build_dag_graph produces React Flow node and edge shapes", {
   td <- mock_targets_data()
   g  <- build_dag_graph(td)
-  expect_setequal(vapply(g$nodes, `[[`, character(1), "id"), td$target_names)
+  # Functions are included by default; tar_network() reports them as vertices.
+  expect_true(all(td$target_names %in% vapply(g$nodes, `[[`, character(1), "id")))
   n1 <- g$nodes[[1]]
   expect_true(all(c("id", "label", "status", "x", "y", "layer") %in% names(n1)))
   if (length(g$edges) > 0) {
@@ -197,14 +198,67 @@ test_that("warnings are carried through when present", {
 })
 
 test_that("build_dag_graph works when no store exists", {
-  # No meta rows: everything should still resolve, with runtime fields absent.
+  # Verified against a real store-less pipeline: tar_network() still reports
+  # vertex `type`, so branching is known, but `branches`, `seconds` and `bytes`
+  # come back NA because the counts live in the store.
   td <- mock_branched_data()
   td$meta <- td$meta[0, ]
-  g <- build_dag_graph(td)
+  td$network$vertices$branches <- NA
+  td$network$vertices$seconds  <- NA
+  g  <- build_dag_graph(td)
   by <- stats::setNames(g$nodes, vapply(g$nodes, `[[`, character(1), "id"))
-  expect_true(by[["chunk"]]$branched)      # pattern is static, still known
+  expect_true(by[["chunk"]]$branched)      # from vertex type / manifest pattern
   expect_equal(by[["chunk"]]$n_branches, 0L)
   expect_true(is.na(by[["chunk"]]$seconds))
+})
+
+test_that("function vertices are included, and can be excluded", {
+  td   <- mock_targets_data()
+  with_fns <- build_dag_graph(td)
+  no_fns   <- build_dag_graph(td, include_functions = FALSE)
+  kinds <- function(g) vapply(g$nodes, `[[`, character(1), "kind")
+  expect_true("function" %in% kinds(with_fns))
+  expect_false("function" %in% kinds(no_fns))
+  expect_true(length(no_fns$nodes) < length(with_fns$nodes))
+})
+
+test_that("a function node links to its function page, not a target page", {
+  g  <- build_dag_graph(mock_targets_data())
+  by <- stats::setNames(g$nodes, vapply(g$nodes, `[[`, character(1), "id"))
+  expect_equal(by[["clean_raw"]]$page, "functions/clean_raw.md")
+  expect_equal(by[["clean_raw"]]$status, "function")
+  expect_equal(by[["clean_data"]]$page, "targets/clean_data.md")
+})
+
+test_that("dropping functions also drops edges that referenced them", {
+  no_fns <- build_dag_graph(mock_targets_data(), include_functions = FALSE)
+  ids <- vapply(no_fns$nodes, `[[`, character(1), "id")
+  for (ed in no_fns$edges) {
+    expect_true(ed$source %in% ids)
+    expect_true(ed$target %in% ids)
+  }
+})
+
+test_that("the viewer no longer loads mermaid", {
+  tmp <- withr::local_tempdir(); cfg <- mock_cfg(tmp); setup_site_dirs(cfg)
+  generate_viewer(mock_targets_data(), character(), cfg, pkg_name = "No mermaid")
+  html <- paste(readLines(file.path(cfg$site_path, "viewer.html"), warn = FALSE),
+                collapse = "\n")
+  expect_false(grepl("mermaid.min.js", html, fixed = TRUE))
+  expect_false(grepl("mermaid.initialize", html, fixed = TRUE))
+  expect_false(grepl("mermaid.run", html, fixed = TRUE))
+  # The fence selector must stay: the .md files still carry mermaid fences.
+  expect_true(grepl("code.language-mermaid", html, fixed = TRUE))
+})
+
+test_that("target pages still carry a mermaid fence for portability", {
+  tmp <- withr::local_tempdir(); cfg <- mock_cfg(tmp); setup_site_dirs(cfg)
+  suppressMessages(generate_all_target_pages(mock_targets_data(), cfg))
+  md <- paste(readLines(file.path(cfg$targets_dir, "clean_data.md"), warn = FALSE),
+              collapse = "\n")
+  # GitHub and most markdown viewers render these; dropping them would make the
+  # generated .md files worse outside tardoc's own viewer.
+  expect_true(grepl("```mermaid", md, fixed = TRUE))
 })
 
 test_that("the viewer embeds the graph and keeps its navigation functions", {
@@ -216,7 +270,7 @@ test_that("the viewer embeds the graph and keeps its navigation functions", {
   expect_true(grepl("map(files)", html, fixed = TRUE))
   # The React Flow block once ate these when its boundary was wrong.
   for (fn in c("function showTab", "function renderNavList", "function loadPage",
-               "function expandMermaid", "function closeMermaid")) {
+               "function renderLocalGraph", "function renderOverview")) {
     expect_true(grepl(fn, html, fixed = TRUE), info = fn)
   }
 })

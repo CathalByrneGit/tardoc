@@ -95,84 +95,41 @@ dag_layout <- function(nodes, edges, x_spacing = 220, y_spacing = 90) {
 
 #' Build the node and edge lists a React Flow graph needs
 #'
-#' Turns `targets_data` into the `{nodes, edges}` shape the React Flow viewer
+#' Turns `targets_data` into the `{nodes, edges}` shape the viewer's graph
 #' consumes, with positions already assigned by [dag_layout()].
 #'
-#' Each node carries enough detail for the graph page to show a panel when it is
-#' clicked -- description, command, status, build time, immediate neighbours,
-#' and a deep link into the viewer -- so a reader can inspect a target without
-#' leaving the graph.
+#' Nodes come from `tar_network()`'s vertices, which already carry `type`
+#' (`stem` / `pattern` / `function`), a branch count, runtime and size. They are
+#' enriched from the manifest (command, branching pattern, storage settings) and
+#' the metadata (errors, warnings, build time) so a reader can inspect a target
+#' without leaving the graph.
 #'
 #' @param targets_data Output of [load_targets_data()].
+#' @param include_functions Logical. Include function vertices as nodes.
+#'   `tar_network()` reports the functions a target calls, and the viewer can
+#'   toggle them.
 #' @return A list with `nodes` and `edges`.
 #' @export
-build_dag_graph <- function(targets_data) {
-  names_vec <- targets_data$target_names
-  net_edges <- targets_data$network$edges
+build_dag_graph <- function(targets_data, include_functions = TRUE) {
+  verts <- as.data.frame(targets_data$network$vertices, stringsAsFactors = FALSE)
+  if (is.null(verts$type)) verts$type <- "stem"
+  if (!include_functions) verts <- verts[verts$type != "function", , drop = FALSE]
+
+  keep_names <- as.character(verts$name)
+  net_edges  <- targets_data$network$edges
   edges <- data.frame(
     from = as.character(net_edges$from),
     to   = as.character(net_edges$to),
     stringsAsFactors = FALSE
   )
-  edges <- edges[edges$from %in% names_vec & edges$to %in% names_vec, , drop = FALSE]
+  edges <- edges[edges$from %in% keep_names & edges$to %in% keep_names, , drop = FALSE]
 
-  pos      <- dag_layout(names_vec, edges)
+  pos      <- dag_layout(keep_names, edges)
   meta     <- targets_data$meta
   manifest <- targets_data$manifest
 
-  chr1 <- function(x) {
-    if (length(x) == 0 || is.na(x[1])) "" else as.character(x[1])
-  }
-
   nodes <- lapply(seq_len(nrow(pos)), function(i) {
-    nm   <- pos$name[i]
-    mrow <- meta[meta$name == nm, , drop = FALSE]
-    frow <- manifest[manifest$name == nm, , drop = FALSE]
-
-    status <- if (nrow(mrow) == 0 || is.na(mrow$error[1])) "uptodate" else "errored"
-    desc   <- if ("description" %in% names(frow)) chr1(frow$description) else ""
-
-    # Branching is read from the manifest's `pattern`, not from meta's
-    # `children`. A plain stem that a downstream pattern maps over also has
-    # children recorded against it, so `children` would report ordinary targets
-    # as branched. `pattern` is the target's own declaration and is available
-    # without a store.
-    pattern  <- if (nrow(frow)) chr1(frow$pattern) else ""
-    branched <- nzchar(pattern)
-    n_branch <- if (branched && nrow(mrow) && "children" %in% names(mrow)) {
-      kids <- mrow$children[[1]]
-      if (is.null(kids)) 0L else sum(!is.na(kids))
-    } else {
-      0L
-    }
-
-    list(
-      id          = nm,
-      label       = nm,
-      status      = status,
-      description = desc,
-      command     = if (nrow(frow)) chr1(frow$command) else "",
-      last_built  = if (nrow(mrow)) chr1(as.character(mrow$time)) else "",
-      error       = if (nrow(mrow)) chr1(mrow$error) else "",
-      warnings    = if (nrow(mrow) && "warnings" %in% names(mrow))
-                      chr1(mrow$warnings) else "",
-      pattern     = pattern,
-      branched    = branched,
-      n_branches  = n_branch,
-      type        = if (nrow(mrow) && "type" %in% names(mrow))
-                      chr1(mrow$type) else if (branched) "pattern" else "stem",
-      format      = if (nrow(frow)) chr1(frow$format) else "",
-      repository  = if (nrow(frow)) chr1(frow$repository) else "",
-      iteration   = if (nrow(frow)) chr1(frow$iteration) else "",
-      seconds     = if (nrow(mrow) && "seconds" %in% names(mrow) &&
-                        !is.na(mrow$seconds[1])) as.numeric(mrow$seconds[1]) else NA,
-      bytes       = if (nrow(mrow) && "bytes" %in% names(mrow) &&
-                        !is.na(mrow$bytes[1])) as.numeric(mrow$bytes[1]) else NA,
-      upstream    = as.list(edges$from[edges$to   == nm]),
-      downstream  = as.list(edges$to[edges$from == nm]),
-      page        = paste0("targets/", nm, ".md"),
-      x = pos$x[i], y = pos$y[i], layer = pos$layer[i]
-    )
+    .dag_node(pos[i, ], verts, meta, manifest, edges)
   })
 
   edge_list <- lapply(seq_len(nrow(edges)), function(i) {
@@ -181,4 +138,86 @@ build_dag_graph <- function(targets_data) {
   })
 
   list(nodes = nodes, edges = edge_list)
+}
+
+#' Build one graph node
+#'
+#' Split out of [build_dag_graph()] so that function stays within the project's
+#' complexity budget: assembling a node touches four data sources and a dozen
+#' optional fields.
+#'
+#' @param prow One row of the [dag_layout()] result.
+#' @param verts,meta,manifest,edges Data frames from [build_dag_graph()].
+#' @return A list describing one node.
+#' @keywords internal
+.dag_node <- function(prow, verts, meta, manifest, edges) {
+  nm   <- prow$name
+  vrow <- verts[verts$name == nm, , drop = FALSE]
+  mrow <- meta[meta$name == nm, , drop = FALSE]
+  frow <- manifest[manifest$name == nm, , drop = FALSE]
+
+  chr1 <- function(x) if (length(x) == 0 || is.na(x[1])) "" else as.character(x[1])
+  num1 <- function(df, col) {
+    if (!is.null(df) && nrow(df) && col %in% names(df) && !is.na(df[[col]][1])) {
+      as.numeric(df[[col]][1])
+    } else {
+      NA
+    }
+  }
+  fld <- function(df, col) if (nrow(df) && col %in% names(df)) chr1(df[[col]]) else ""
+
+  kind <- chr1(vrow$type)
+  if (!nzchar(kind)) kind <- "stem"
+
+  status <- if (kind == "function") {
+    "function"
+  } else if (nrow(mrow) == 0 || is.na(mrow$error[1])) {
+    "uptodate"
+  } else {
+    "errored"
+  }
+
+  # Branching comes from the vertex type or the manifest's `pattern` -- the
+  # target's own declaration, known without a store. meta$children is only ever
+  # a count, never the signal: targets records branch names against a plain stem
+  # that a pattern maps over.
+  pattern  <- fld(frow, "pattern")
+  branched <- kind == "pattern" || nzchar(pattern)
+  n_branch <- num1(vrow, "branches")
+  if (is.na(n_branch) && branched && nrow(mrow) && "children" %in% names(mrow)) {
+    kids <- mrow$children[[1]]
+    n_branch <- if (is.null(kids)) 0 else sum(!is.na(kids))
+  }
+  if (is.na(n_branch) || !branched) n_branch <- 0
+
+  desc <- fld(frow, "description")
+  if (!nzchar(desc)) desc <- fld(vrow, "description")
+
+  secs  <- num1(vrow, "seconds"); if (is.na(secs))  secs  <- num1(mrow, "seconds")
+  bytes <- num1(vrow, "bytes");   if (is.na(bytes)) bytes <- num1(mrow, "bytes")
+
+  list(
+    id          = nm,
+    label       = nm,
+    kind        = kind,
+    status      = status,
+    description = desc,
+    command     = fld(frow, "command"),
+    last_built  = if (nrow(mrow)) chr1(as.character(mrow$time)) else "",
+    error       = fld(mrow, "error"),
+    warnings    = fld(mrow, "warnings"),
+    pattern     = pattern,
+    branched    = branched,
+    n_branches  = as.integer(n_branch),
+    format      = fld(frow, "format"),
+    repository  = fld(frow, "repository"),
+    iteration   = fld(frow, "iteration"),
+    seconds     = secs,
+    bytes       = bytes,
+    upstream    = as.list(edges$from[edges$to   == nm]),
+    downstream  = as.list(edges$to[edges$from == nm]),
+    page        = paste0(if (kind == "function") "functions/" else "targets/",
+                         nm, ".md"),
+    x = prow$x, y = prow$y, layer = prow$layer
+  )
 }
