@@ -16,7 +16,11 @@
 #' @export
 build_site_config <- function(project_path = ".", site_dir = "tardoc",
                                repo_url = NULL) {
-  project_path <- sub("/+$", "", normalizePath(project_path, mustWork = FALSE))
+  # winslash = "/" so every derived path uses one separator on all platforms:
+  # these paths end up inside SQL string literals, JSON and HTML, and
+  # file.path() would otherwise mix "\\" and "/" on Windows.
+  project_path <- sub("/+$", "",
+                      normalizePath(project_path, winslash = "/", mustWork = FALSE))
   site_path    <- file.path(project_path, site_dir)
 
   list(

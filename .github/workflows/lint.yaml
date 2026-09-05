@@ -23,9 +23,21 @@ jobs:
 
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
-          extra-packages: any::lintr, local::.
+          extra-packages: any::lintr, any::cyclocomp, local::.
           needs: lint
 
+      # Scope note (.lintr is DCF and cannot carry comments):
+      # this job guards against regressions in what the package already passes,
+      # it is not a whole-codebase restyle. Five formatting linters are off on
+      # purpose -- enabling them flags ~94 pre-existing lines (indentation,
+      # line length, commented-out code, brace placement, compound semicolons).
+      # Adopting a formatting standard is a project decision and belongs in its
+      # own mechanical commit, not alongside behaviour changes.
+      # Two thresholds sit just above what the code contains so they still catch
+      # anything worse: object_length 35 because the exported
+      # get_target_network_dependencies() is 31 characters and renaming it would
+      # break callers; cyclocomp 50 because view_tardoc_db() is 47 -- a real
+      # smell, but tier 3 has no end-to-end tests to refactor behind.
       - name: Lint
         run: lintr::lint_package()
         shell: Rscript {0}
