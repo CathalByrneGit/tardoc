@@ -1,19 +1,10 @@
 # tests/testthat/helper-fixtures.R
 
+# Delegate to the real builder rather than hand-rolling the same list: a
+# hand-rolled fixture kept unnormalised Windows paths and disagreed with
+# production over path separators.
 mock_cfg <- function(tmp = withr::local_tempdir(), site_dir = "tardoc") {
-  site_path <- file.path(tmp, site_dir)
-  list(
-    project_path    = tmp,
-    site_path       = site_path,
-    targets_dir     = file.path(site_path, "targets"),
-    functions_dir   = file.path(site_path, "functions"),
-    notes_dir       = file.path(site_path, "notes"),
-    notes_targets   = file.path(site_path, "notes", "targets"),
-    notes_functions = file.path(site_path, "notes", "functions"),
-    targets_store   = file.path(tmp, "_targets"),
-    r_scripts_dir   = file.path(tmp, "R"),
-    repo_url        = NULL
-  )
+  build_site_config(tmp, site_dir)
 }
 
 mock_targets_data <- function(has_store = FALSE) {

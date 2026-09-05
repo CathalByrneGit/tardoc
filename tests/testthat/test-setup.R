@@ -9,7 +9,17 @@ test_that("build_site_config returns all required keys", {
 })
 
 test_that("build_site_config resolves project_path to absolute", {
-  expect_true(startsWith(build_site_config()$project_path, "/"))
+  # Not startsWith("/") -- an absolute Windows path starts "C:/".
+  got <- build_site_config()$project_path
+  here <- sub("/+$", "", normalizePath(".", winslash = "/", mustWork = FALSE))
+  expect_identical(got, here)
+  expect_false(got == ".")
+})
+
+test_that("build_site_config uses one path separator throughout", {
+  cfg <- build_site_config()
+  paths <- unlist(cfg[setdiff(names(cfg), "repo_url")], use.names = FALSE)
+  expect_false(any(grepl("\\\\", paths)))
 })
 
 test_that("build_site_config site_path is inside project_path", {
