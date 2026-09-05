@@ -98,6 +98,11 @@ dag_layout <- function(nodes, edges, x_spacing = 220, y_spacing = 90) {
 #' Turns `targets_data` into the `{nodes, edges}` shape the React Flow viewer
 #' consumes, with positions already assigned by [dag_layout()].
 #'
+#' Each node carries enough detail for the graph page to show a panel when it is
+#' clicked -- description, command, status, build time, immediate neighbours,
+#' and a deep link into the viewer -- so a reader can inspect a target without
+#' leaving the graph.
+#'
 #' @param targets_data Output of [load_targets_data()].
 #' @return A list with `nodes` and `edges`.
 #' @export
@@ -111,15 +116,35 @@ build_dag_graph <- function(targets_data) {
   )
   edges <- edges[edges$from %in% names_vec & edges$to %in% names_vec, , drop = FALSE]
 
-  pos <- dag_layout(names_vec, edges)
-  meta <- targets_data$meta
+  pos      <- dag_layout(names_vec, edges)
+  meta     <- targets_data$meta
+  manifest <- targets_data$manifest
+
+  chr1 <- function(x) {
+    if (length(x) == 0 || is.na(x[1])) "" else as.character(x[1])
+  }
 
   nodes <- lapply(seq_len(nrow(pos)), function(i) {
-    nm  <- pos$name[i]
-    row <- meta[meta$name == nm, , drop = FALSE]
-    status <- if (nrow(row) == 0 || is.na(row$error[1])) "uptodate" else "errored"
-    list(id = nm, label = nm, status = status,
-         x = pos$x[i], y = pos$y[i], layer = pos$layer[i])
+    nm   <- pos$name[i]
+    mrow <- meta[meta$name == nm, , drop = FALSE]
+    frow <- manifest[manifest$name == nm, , drop = FALSE]
+
+    status <- if (nrow(mrow) == 0 || is.na(mrow$error[1])) "uptodate" else "errored"
+    desc   <- if ("description" %in% names(frow)) chr1(frow$description) else ""
+
+    list(
+      id          = nm,
+      label       = nm,
+      status      = status,
+      description = desc,
+      command     = if (nrow(frow)) chr1(frow$command) else "",
+      last_built  = if (nrow(mrow)) chr1(as.character(mrow$time)) else "",
+      error       = if (nrow(mrow)) chr1(mrow$error) else "",
+      upstream    = as.list(edges$from[edges$to   == nm]),
+      downstream  = as.list(edges$to[edges$from == nm]),
+      page        = paste0("targets/", nm, ".md"),
+      x = pos$x[i], y = pos$y[i], layer = pos$layer[i]
+    )
   })
 
   edge_list <- lapply(seq_len(nrow(edges)), function(i) {

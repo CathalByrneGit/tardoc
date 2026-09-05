@@ -16,3 +16,9 @@ A list with \code{nodes} and \code{edges}.
 Turns \code{targets_data} into the \verb{\{nodes, edges\}} shape the React Flow viewer
 consumes, with positions already assigned by \code{\link[=dag_layout]{dag_layout()}}.
 }
+\details{
+Each node carries enough detail for the graph page to show a panel when it is
+clicked -- description, command, status, build time, immediate neighbours,
+and a deep link into the viewer -- so a reader can inspect a target without
+leaving the graph.
+}

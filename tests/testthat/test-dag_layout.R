@@ -73,3 +73,73 @@ test_that("build_dag_graph keeps only edges between known targets", {
     expect_true(ed$target %in% ids)
   }
 })
+
+test_that("nodes carry the detail the click panel renders", {
+  g <- build_dag_graph(mock_targets_data())
+  n <- g$nodes[[1]]
+  expect_true(all(c("description", "command", "last_built", "error",
+                    "upstream", "downstream", "page", "status") %in% names(n)))
+})
+
+test_that("a node's upstream and downstream match the edge list", {
+  td <- mock_targets_data()
+  g  <- build_dag_graph(td)
+  by <- stats::setNames(g$nodes, vapply(g$nodes, `[[`, character(1), "id"))
+  # clean_data is fed by raw_data and feeds model_fit in the fixture network.
+  cd <- by[["clean_data"]]
+  expect_true("raw_data" %in% unlist(cd$upstream))
+  expect_true("model_fit" %in% unlist(cd$downstream))
+})
+
+test_that("a root has no upstream and a leaf no downstream", {
+  g  <- build_dag_graph(mock_targets_data())
+  by <- stats::setNames(g$nodes, vapply(g$nodes, `[[`, character(1), "id"))
+  expect_length(by[["raw_data"]]$upstream, 0L)
+  expect_length(by[["report"]]$downstream, 0L)
+})
+
+test_that("description and command come through from the manifest", {
+  g  <- build_dag_graph(mock_targets_data())
+  by <- stats::setNames(g$nodes, vapply(g$nodes, `[[`, character(1), "id"))
+  expect_equal(by[["raw_data"]]$description, "Raw sensor readings")
+  expect_equal(by[["clean_data"]]$command, "clean_raw(raw_data)")
+})
+
+test_that("a missing description is an empty string, never NA", {
+  g  <- build_dag_graph(mock_targets_data())
+  by <- stats::setNames(g$nodes, vapply(g$nodes, `[[`, character(1), "id"))
+  # model_fit's description is NA in the fixture; report's is "".
+  expect_identical(by[["model_fit"]]$description, "")
+  expect_false(anyNA(vapply(g$nodes, `[[`, character(1), "description")))
+})
+
+test_that("the page path points at the target's markdown file", {
+  g  <- build_dag_graph(mock_targets_data())
+  by <- stats::setNames(g$nodes, vapply(g$nodes, `[[`, character(1), "id"))
+  expect_equal(by[["clean_data"]]$page, "targets/clean_data.md")
+})
+
+test_that("generate_reactflow_graph embeds the graph and no placeholders", {
+  tmp <- withr::local_tempdir(); cfg <- mock_cfg(tmp); setup_site_dirs(cfg)
+  p <- suppressMessages(
+    generate_reactflow_graph(mock_targets_data(), cfg, pkg_name = "Zebra pipeline")
+  )
+  html <- paste(readLines(p, warn = FALSE), collapse = "\n")
+  expect_true(grepl("Zebra pipeline", html, fixed = TRUE))
+  expect_false(grepl("\\{\\{[A-Z_]+\\}\\}", html))
+  expect_true(grepl("clean_data", html, fixed = TRUE))
+  expect_true(grepl("onNodeClick", html, fixed = TRUE))
+})
+
+test_that("the graph page pins its CDN assets with integrity", {
+  tmp <- withr::local_tempdir(); cfg <- mock_cfg(tmp); setup_site_dirs(cfg)
+  p <- suppressMessages(generate_reactflow_graph(mock_targets_data(), cfg))
+  html <- paste(readLines(p, warn = FALSE), collapse = "\n")
+  srcs <- regmatches(html, gregexpr('(src|href)="https://[^"]+"', html))[[1]]
+  expect_true(length(srcs) > 0)
+  expect_false(any(grepl("jsdelivr|cdnjs", srcs) & !grepl("@[0-9]|/[0-9]+\\.", srcs)))
+  expect_equal(
+    length(regmatches(html, gregexpr('integrity="sha384-', html))[[1]]),
+    length(srcs)
+  )
+})

@@ -45,6 +45,7 @@
   h1 { font-size:16px; margin:0; font-weight:600; }
   .meta { font-size:12px; color:var(--muted); display:flex; gap:16px; flex-wrap:wrap; }
   .meta b { color:var(--text); font-weight:500; }
+  #stage { position:relative; flex:1; min-height:0; display:flex; }
   #graph { flex:1; min-height:0; }
 
   /* Node styling. React Flow draws no chrome of its own, so the node is ours. */
@@ -60,6 +61,55 @@
   .tnode.uptodate .st { color:var(--ok); }
   .react-flow__node.selected .tnode { border-color:var(--accent-soft); }
   .react-flow__attribution { background:transparent; color:var(--muted); }
+  .tnode { cursor:pointer; }
+  .tnode:hover { border-color:var(--accent-soft); }
+
+  /* Detail panel: opens on node click, closes on Escape or the backdrop. */
+  #panel {
+    position:absolute; top:0; right:0; bottom:0; width:min(420px,92vw);
+    background:var(--panel); border-left:1px solid var(--surface);
+    padding:18px 20px 24px; overflow-y:auto; z-index:6;
+    box-shadow:-8px 0 24px rgba(0,0,0,.35);
+  }
+  #panel[hidden] { display:none; }
+  #panel .close {
+    position:absolute; top:12px; right:14px; background:none; border:none;
+    color:var(--muted); font-size:20px; cursor:pointer; line-height:1;
+  }
+  #panel .close:hover { color:var(--text); }
+  #panel h2 { margin:0 0 2px; font-size:17px; font-family:inherit; }
+  #panel .pill {
+    display:inline-block; font-size:11px; padding:2px 8px; border-radius:10px;
+    background:var(--surface); color:var(--muted); margin-bottom:14px;
+  }
+  #panel .pill.uptodate { color:var(--ok); }
+  #panel .pill.errored  { color:var(--err); }
+  #panel h3 {
+    font-size:11px; text-transform:uppercase; letter-spacing:.09em;
+    color:var(--muted); margin:16px 0 6px; font-weight:600;
+  }
+  #panel p, #panel pre { margin:0; font-size:13px; }
+  #panel pre {
+    background:var(--bg); border:1px solid var(--surface); border-radius:6px;
+    padding:9px 11px; overflow-x:auto; font-size:12px; line-height:1.5;
+    white-space:pre-wrap; word-break:break-word;
+  }
+  #panel .chips { display:flex; flex-wrap:wrap; gap:6px; }
+  #panel .chip {
+    background:var(--surface); border-radius:5px; padding:3px 8px;
+    font-size:12px; cursor:pointer; border:1px solid transparent;
+  }
+  #panel .chip:hover { border-color:var(--accent-soft); color:var(--accent-soft); }
+  #panel .none { color:var(--muted); font-style:italic; font-size:12px; }
+  #panel .open {
+    display:inline-block; margin-top:20px; padding:8px 14px; border-radius:6px;
+    background:var(--accent); color:#fff; text-decoration:none; font-size:13px;
+    font-weight:500;
+  }
+  #panel .open:hover { background:var(--accent-soft); color:#1e1e2e; }
+  #panel a:focus-visible, #panel button:focus-visible, .chip:focus-visible {
+    outline:2px solid var(--accent-soft); outline-offset:2px;
+  }
 </style>
 </head>
 <body>
@@ -72,7 +122,10 @@
     <span>drag to pan &middot; scroll to zoom &middot; drag a node to move it</span>
   </div>
 </header>
-<div id="graph"></div>
+<div id="stage">
+  <div id="graph"></div>
+  <aside id="panel" hidden aria-label="Target details"></aside>
+</div>
 
 <script>
 const GRAPH = {{GRAPH_JSON}};
@@ -110,6 +163,63 @@ document.getElementById('n-edges').textContent = edges.length;
 document.getElementById('n-layers').textContent =
   new Set(GRAPH.nodes.map(function (n) { return n.layer; })).size;
 
+// ---- detail panel ---------------------------------------------------------
+const BY_ID = {};
+GRAPH.nodes.forEach(function (n) { BY_ID[n.id] = n; });
+const panelEl = document.getElementById('panel');
+
+function esc(t) {
+  return String(t == null ? '' : t)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function chips(list) {
+  if (!list || !list.length) return '<p class="none">none</p>';
+  return '<div class="chips">' + list.map(function (n) {
+    return '<button class="chip" data-goto="' + esc(n) + '">' + esc(n) + '</button>';
+  }).join('') + '</div>';
+}
+
+function section(title, body) {
+  return body ? '<h3>' + title + '</h3>' + body : '';
+}
+
+function openPanel(id) {
+  const n = BY_ID[id];
+  if (!n) return;
+  // The viewer reads this hash on load, so the link lands on the target's page
+  // rather than just opening the viewer at its home panel.
+  const href = '../viewer.html#targets:' + encodeURIComponent(n.id);
+  panelEl.innerHTML =
+    '<button class="close" aria-label="Close">&times;</button>' +
+    '<h2>' + esc(n.label) + '</h2>' +
+    '<span class="pill ' + esc(n.status) + '">' + esc(n.status) + '</span>' +
+    section('Description', n.description
+      ? '<p>' + esc(n.description) + '</p>'
+      : '<p class="none">no description</p>') +
+    section('Command', n.command ? '<pre>' + esc(n.command) + '</pre>' : '') +
+    section('Last built', n.last_built
+      ? '<p>' + esc(n.last_built) + '</p>'
+      : '<p class="none">never built</p>') +
+    (n.error ? section('Error', '<pre>' + esc(n.error) + '</pre>') : '') +
+    section('Depends on', chips(n.upstream)) +
+    section('Feeds into', chips(n.downstream)) +
+    '<a class="open" href="' + href + '">Open full page &rarr;</a>';
+  panelEl.hidden = false;
+  panelEl.querySelector('.close').onclick = closePanel;
+  panelEl.querySelectorAll('[data-goto]').forEach(function (b) {
+    b.onclick = function () { openPanel(b.getAttribute('data-goto')); };
+  });
+  panelEl.scrollTop = 0;
+}
+
+function closePanel() { panelEl.hidden = true; }
+
+document.addEventListener('keydown', function (ev) {
+  if (ev.key === 'Escape') closePanel();
+});
+
 function Graph() {
   return e(Flow, {
     defaultNodes: nodes,
@@ -117,6 +227,8 @@ function Graph() {
     fitView: true,
     fitViewOptions: { padding: 0.15 },
     minZoom: 0.1,
+    onNodeClick: function (_ev, node) { openPanel(node.id); },
+    onPaneClick: closePanel,
     proOptions: { hideAttribution: false }
   },
     e(RF.Background, { color: '#313244', gap: 18 }),

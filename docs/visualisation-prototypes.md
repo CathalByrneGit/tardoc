@@ -1,19 +1,12 @@
-# Two visualisation prototypes
+# React Flow pipeline graph
 
-Working code, not a proposal. Both came out of reading
-[dplyneage](https://github.com/tgerke/dplyneage) and
-[blockr](https://github.com/BristolMyersSquibb/blockr.core), and both are
-additive — nothing existing changed, and `document_targets()` still produces
-exactly what it did before.
-
-| | From | Status |
-|---|---|---|
-| React Flow pipeline graph | dplyneage | Working, rendered, screenshotted |
-| shinylive.io URL embedding | blockr / roxy.shinylive | Working, encoding verified; live render **not** verified here |
+Working code, not a proposal, borrowed from
+[dplyneage](https://github.com/tgerke/dplyneage). Additive: `document_targets()`
+still produces exactly what it did before.
 
 ---
 
-## 1. React Flow instead of mermaid
+## React Flow instead of mermaid
 
 `generate_reactflow_graph()` writes `reactflow_graph.html` — the target DAG as
 an interactive graph.
@@ -81,60 +74,41 @@ That is also why dplyneage ships its own 347 KB webpack bundle with React rolled
 in. tardoc doesn't need to: v11's UMD loads from CDN with subresource integrity,
 matching how `viewer.html` already loads mermaid and fuse.js.
 
+### Click a node to inspect it
+
+Clicking a node opens a panel with what you would otherwise have to go and look
+up:
+
+![The detail panel open on the clean target, showing its description, command, last build time and neighbours](figures/reactflow-click.png)
+
+- description and the R command that builds it
+- status and last build time, with the error when there is one
+- **Depends on** / **Feeds into** as clickable chips — clicking one moves the
+  panel to that neighbour, so you can walk the pipeline without leaving the graph
+- **Open full page →**, linking into the viewer
+
+Close with the × or Escape, or by clicking empty canvas.
+
+### Deep links into the viewer
+
+The panel's link only means something if the viewer can be told which page to
+open, so `viewer.html` now reads and writes a location hash:
+`viewer.html#targets:clean` opens that target directly, and clicking a page in
+the viewer records it in the hash so the URL can be shared or reloaded.
+
+That is useful on its own, independent of this graph — it is the first time any
+tardoc page has been directly linkable.
+
+Verified in a browser: deep link on load, `hashchange` while open, clicking a
+nav item writing the hash back, and a hash naming a target that does not exist
+falling back to the home panel rather than erroring.
+
 ### Not done
 
 This is a **separate page**, not a replacement. `viewer.html` still uses mermaid
 for both the overview and the per-target graphs. Swapping it properly means
 porting the per-target local graphs and the expand modal too, and deciding
 whether to keep mermaid for the markdown pages, which embed ```mermaid fences.
-
----
-
-## 2. Embedding live Shiny demos without hosting anything
-
-`shinylive_url()` and `shinylive_iframe()` compress app source into a
-`https://shinylive.io/r/app/#code=…` fragment. shinylive.io supplies the webR
-runtime, so the documentation page carries only a URL.
-
-```r
-shinylive_iframe(list("app.R" = readLines("demo/app.R")), height = "500px")
-```
-
-This is blockr's pattern, via
-[`roxy.shinylive`](https://github.com/insightsengineering/roxy.shinylive), which
-does the same thing behind an `@examplesShinylive` roxygen tag.
-
-### Why it matters
-
-A previous evaluation (on the `claude/shinylive-evaluation` branch) measured the
-**self-hosted** route — `shinylive::export()` — at **66–77 MB** plus a server
-setting cross-origin isolation headers, and recommended against adopting it.
-
-The URL route has a completely different cost profile. Nothing is hosted; the
-page holds a string. For a documentation generator that wants a runnable example
-on a function page, that is a far better fit than the "replace tier 3" framing
-that was rejected.
-
-The trade is real, not absent:
-
-- the page needs internet access when viewed, so this can never belong in tier 1
-- it depends on a third party staying up
-- the app's source travels in the URL, so nothing private belongs in it
-- URLs grow with app size; a large app makes an unwieldy link
-
-### What is verified, and what is not
-
-**Verified:** the encoding round-trips. Tests compress a payload, decompress it
-back and assert the files match exactly — including multi-file apps and
-multi-line sources. shinylive.io will only run what it can decode, so this is
-the property that matters most.
-
-**Not verified:** that shinylive.io actually renders these URLs. Chromium's
-outbound network is blocked in the container this was built in (`curl` reaches
-`shinylive.io` fine and returns 200; the browser gets `ERR_CONNECTION_RESET`
-with and without the proxy). The format matches what roxy.shinylive documents,
-but **someone should open one of these URLs in a real browser before this is
-relied on.**
 
 ---
 
@@ -146,11 +120,6 @@ setwd(system.file("examples/station-monitoring", package = "tardoc"))
 targets::tar_make()
 cfg <- build_site_config(".")
 generate_reactflow_graph(load_targets_data(cfg), cfg, "Station Monitoring Pipeline")
-
-# A shinylive URL
-shinylive_url("library(shiny)\nshinyApp(fluidPage('hi'), function(i, o) {})")
 ```
 
-Both are exported and covered by tests (`test-dag_layout.R`,
-`test-shinylive_url.R`). `lzstring` is in `Suggests` and guarded with
-`requireNamespace()`, like `duckdb` and `ellmer`.
+Covered by `tests/testthat/test-dag_layout.R`.

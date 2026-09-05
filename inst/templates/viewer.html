@@ -262,6 +262,11 @@ function loadPage(type, name) {
   const key  = type + ':' + name;
   const page = PAGE_MAP[key];
   currentKey = key;
+  // Record the page in the hash so it can be linked to and survives a reload.
+  // The graph page links here as viewer.html#targets:<name>.
+  if (location.hash.slice(1) !== key) {
+    history.replaceState(null, '', '#' + key);
+  }
   renderNavList(document.getElementById('search-box').value, currentTab);
 
   document.getElementById('home-panel').style.display   = 'none';
@@ -412,6 +417,19 @@ function closeMermaid() {
 
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeMermaid(); });
 
+// Deep linking: #targets:<name> or #functions:<name>.
+function openFromHash() {
+  const key = decodeURIComponent(location.hash.slice(1));
+  if (!key || !PAGE_MAP[key]) return false;
+  const sep = key.indexOf(':');
+  const type = key.slice(0, sep);
+  const name = key.slice(sep + 1);
+  showTab(type);
+  loadPage(type, name);
+  return true;
+}
+window.addEventListener('hashchange', openFromHash);
+
 // Fuse.js search
 const fuse = new Fuse([...targets, ...functions], {
   keys: ['name', 'description', 'command'],
@@ -444,6 +462,9 @@ document.getElementById('search-box').addEventListener('input', function() {
 });
 
 renderNavList(null, 'targets');
+
+// A deep link wins over the default home view.
+openFromHash();
 </script>
 </body>
 </html>
