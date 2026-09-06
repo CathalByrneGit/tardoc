@@ -27,7 +27,7 @@ column-level lineage the same way.
 per-node status colouring.
 
 **mermaid is no longer loaded at all.** The per-target pages still carry a
-```mermaid fence, so the generated `.md` files render on GitHub and anywhere
+`mermaid` fence, so the generated `.md` files render on GitHub and anywhere
 else markdown is read — that portability was worth keeping. The viewer ignores
 the fence's contents and replaces it with a React Flow graph built from the same
 data:
