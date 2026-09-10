@@ -1,6 +1,6 @@
 # tardoc
 
-Auto-generate documentation for any [targets](https://docs.ropensci.org/targets/) pipeline. Point tardoc at your project and get structured markdown, a browsable HTML viewer, and — optionally — a full analytics stack with SQL queries, semantic search, git history, code intelligence, and an LLM chat interface.
+Auto-generate documentation for any [targets](https://docs.ropensci.org/targets/) pipeline. Point tardoc at your project and get structured markdown, a browsable HTML viewer, and — optionally — a full analytics stack with SQL queries, semantic search, and an LLM chat interface.
 
 ![The tardoc viewer showing an interactive targets pipeline dependency graph](man/figures/viewer-overview.png)
 
@@ -153,8 +153,6 @@ This is the right tier for:
 - **Recursive lineage queries** — upstream / downstream at any depth via CTEs
 - **Pre-built queries** — status summary, errored targets, most connected, missing descriptions, function usage
 
-**With code intelligence (if built):** a Call graph tab shows which functions call which, along with complexity metrics. A Git history tab shows recent commits touching R files.
-
 ```sql
 -- Examples of what you can write in the SQL editor:
 targets %>% filter(status == "errored") %>% select(name, command, last_built)
@@ -189,15 +187,14 @@ Falls back to WASM + JSON mode if Quack is unavailable.
 
 - **Semantic search** — if `quackformers` and `faiss` were available at build time, BERT embeddings (all-MiniLM-L6-v2, 384-dim) and a HNSW32 FAISS index are stored in the database. "Find targets related to outlier removal" works even when those words don't appear in descriptions.
 - **Live data** — queries run against the current database state, not a snapshot
-- **Code intelligence** — `sitting_duck` (R code AST via tree-sitter) and `duck_tails` (git history) run at build time and are served from the database
 
 **`tardoc.duckdb` capability flags** — check what was built:
 
 ```r
 con  <- duckdb::dbConnect(duckdb::duckdb(), "tardoc/tardoc.duckdb", read_only = TRUE)
 DBI::dbGetQuery(con, "SELECT * FROM _meta")
-#   has_fts  has_embeddings  has_faiss  has_ast  has_git  has_mcp
-#      TRUE           FALSE      FALSE     TRUE     TRUE     TRUE
+#   has_fts  has_embeddings  has_faiss  has_mcp
+#      TRUE           FALSE      FALSE     TRUE
 ```
 
 **Community extensions used at build time (all optional):**
@@ -206,8 +203,6 @@ DBI::dbGetQuery(con, "SELECT * FROM _meta")
 |---|---|---|
 | `quackformers` | BERT embeddings | `INSTALL quackformers FROM community` |
 | `faiss` | HNSW32 ANN index | `INSTALL faiss FROM community` |
-| `sitting_duck` | R code AST → function call graph | `INSTALL sitting_duck FROM community` |
-| `duck_tails` | Git history | `INSTALL duck_tails FROM community` |
 | `duckdb_mcp` | MCP server + config | `INSTALL duckdb_mcp FROM community` |
 
 These are installed automatically inside the DuckDB process at build time when the R `duckdb` package is available. Each step is wrapped in `tryCatch` — if an extension is unavailable the build continues, `_meta` records the flag, and `_meta_detail` records *why* the layer was skipped:

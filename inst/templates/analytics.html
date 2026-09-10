@@ -202,7 +202,7 @@ let conn = null, prefix = '';
 async function init() {
   const badge = document.getElementById('badge');
   const msg   = document.getElementById('init-msg');
-  badge.textContent = 'Connecting&hellip;'; badge.className = '';
+  badge.textContent = 'Connecting…'; badge.className = '';
   try {
     msg.style.display = 'none';  // status shown in badge only
     const duckdb = await import('https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.32.0/+esm');
