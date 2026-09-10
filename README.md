@@ -8,22 +8,26 @@ Auto-generate documentation for any [targets](https://docs.ropensci.org/targets/
 
 ---
 
-## Four tiers, all from one command
+## Four tiers, one command to start
 
 ```r
 tardoc::document_targets(pkg_name = "My pipeline")
 ```
 
-This generates everything. Which tier you _use_ depends on how much you need.
+That writes the markdown, the static viewer and the WASM viewer — tiers 1 and
+2, complete. Tiers 3 and 4 need a DuckDB database, which is **not** built here:
+`view_tardoc_db()` builds `tardoc/tardoc.duckdb` the first time you call it.
 
-| Tier | How | Server? | Extra packages |
-|---|---|---|---|
-| **1 — Static viewer** | `view_tardoc()` | No — `file://` | None (CDN) |
-| **2 — WASM analytics** | `view_wasm_analytics()` | No — `file://` | None (CDN) |
-| **3 — Server analytics** | `view_tardoc_db()` | Yes | duckdb, callr, httpuv |
-| **4 — LLM chat** | `view_tardoc_db(llm_chat=...)` | Yes | + ellmer |
+| Tier | How | Server? | Extra packages | Built by |
+|---|---|---|---|---|
+| **1 — Static viewer** | `view_tardoc()` | No — `file://` | None (CDN) | `document_targets()` |
+| **2 — WASM analytics** | `view_wasm_analytics()` | No — `file://` | None (CDN) | `document_targets()` |
+| **3 — Server analytics** | `view_tardoc_db()` | Yes | duckdb, callr, httpuv | `view_tardoc_db()`, on first run |
+| **4 — LLM chat** | `view_tardoc_db(llm_chat=...)` | Yes | + ellmer | `view_tardoc_db()`, on first run |
 
-MCP (bonus): `serve_tardoc_mcp()` exposes the database to Claude Desktop and Claude Code.
+MCP (bonus): `serve_tardoc_mcp()` exposes the database to Claude Desktop and
+Claude Code. It needs the database *and* the community extensions, so it
+requires `view_tardoc_db(db_extensions = TRUE)` to have run at least once.
 
 ---
 
@@ -38,14 +42,17 @@ tardoc::view_tardoc()
 
 Writes `tardoc/viewer.html` — a single self-contained file that opens in any browser with no server and no R dependencies beyond what `document_targets()` already requires. All pipeline content is inlined into the file; the rendering libraries (`marked`, `fuse.js`, and React + React Flow for the graph) are loaded from jsDelivr and cdnjs at exact pinned versions with subresource integrity, so the page needs network access on first open and will be served from the browser cache afterwards.
 
-**Output structure:**
+**Output structure** — everything `document_targets()` writes:
 
 ```
 my_project/
 ├── llms.txt
 └── tardoc/
-    ├── viewer.html              self-contained, opens as file://
+    ├── viewer.html              tier 1, self-contained, opens as file://
+    ├── wasm_analytics.html      tier 2, self-contained, opens as file://
+    ├── analytics.html           tier 3 shell, needs view_tardoc_db()
     ├── search_index.json
+    ├── tardoc_analytics.json
     ├── targets/
     │   └── clean_data.md        one .md per target
     ├── functions/
@@ -54,6 +61,8 @@ my_project/
         ├── targets/clean_data.md    yours — never overwritten
         └── functions/clean_raw.md
 ```
+
+`tardoc.duckdb` is not in that list: `view_tardoc_db()` builds it on first run.
 
 **What the viewer includes:**
 
@@ -176,7 +185,12 @@ install.packages(c("duckdb", "callr", "DBI", "httpuv"))
 tardoc::view_tardoc_db()
 ```
 
-Starts two local services:
+**The first call builds the database.** `document_targets()` does not create
+`tardoc/tardoc.duckdb` — `view_tardoc_db()` does, from the same `_targets.R`
+and roxygen sources, if the file is not already there. Later calls reuse it;
+pass `db_extensions = TRUE` to rebuild with the community extensions.
+
+Then it starts two local services:
 
 - A **DuckDB Quack server** (`callr::r_bg()`) serving `tardoc/tardoc.duckdb` on port 9494. The browser DuckDB WASM connects directly using the [Quack protocol](https://duckdb.org/2026/05/12/quack-remote-protocol) — all queries run server-side.
 - A minimal **httpuv** server on port 9000 delivering the session HTML.
@@ -185,7 +199,7 @@ Falls back to WASM + JSON mode if Quack is unavailable.
 
 **Additional capabilities over Tier 2:**
 
-- **Semantic search** — if `quackformers` and `faiss` were available at build time, BERT embeddings (all-MiniLM-L6-v2, 384-dim) and a HNSW32 FAISS index are stored in the database. "Find targets related to outlier removal" works even when those words don't appear in descriptions.
+- **Semantic search** — off by default. `db_extensions` is `FALSE`, so the first build installs no community extensions. Run `view_tardoc_db(db_extensions = TRUE)` once and, if `quackformers` and `faiss` can be installed, BERT embeddings (all-MiniLM-L6-v2, 384-dim) and a HNSW32 FAISS index are stored in the database. "Find targets related to outlier removal" then works even when those words don't appear in descriptions.
 - **Live data** — queries run against the current database state, not a snapshot
 
 **`tardoc.duckdb` capability flags** — check what was built:
@@ -194,10 +208,14 @@ Falls back to WASM + JSON mode if Quack is unavailable.
 con  <- duckdb::dbConnect(duckdb::duckdb(), "tardoc/tardoc.duckdb", read_only = TRUE)
 DBI::dbGetQuery(con, "SELECT * FROM _meta")
 #   has_fts  has_embeddings  has_faiss  has_mcp
-#      TRUE           FALSE      FALSE     TRUE
+#      TRUE            TRUE       TRUE     TRUE
 ```
 
-**Community extensions used at build time (all optional):**
+After a plain `view_tardoc_db()` only `has_fts` is `TRUE` — FTS is a core
+DuckDB extension, the other three are community ones that `db_extensions`
+gates.
+
+**Community extensions (all optional, all off unless you ask for them):**
 
 | Extension | Provides | Install |
 |---|---|---|
@@ -205,15 +223,21 @@ DBI::dbGetQuery(con, "SELECT * FROM _meta")
 | `faiss` | HNSW32 ANN index | `INSTALL faiss FROM community` |
 | `duckdb_mcp` | MCP server + config | `INSTALL duckdb_mcp FROM community` |
 
-These are installed automatically inside the DuckDB process at build time when the R `duckdb` package is available. Each step is wrapped in `tryCatch` — if an extension is unavailable the build continues, `_meta` records the flag, and `_meta_detail` records *why* the layer was skipped:
+They are installed inside the DuckDB process when the database is built with `view_tardoc_db(db_extensions = TRUE)`. Each step is wrapped in `tryCatch` — if an extension is unavailable the build continues, `_meta` records the flag, and `_meta_detail` records *why* the layer was skipped:
 
 ```r
 DBI::dbGetQuery(con, "SELECT * FROM _meta_detail")
 #   capability  available  reason
+#   embeddings       TRUE  NA
+#   faiss            TRUE  NA
 #   fts              TRUE  NA
-#   embeddings      FALSE  Extension "quackformers" not found
-#   faiss           FALSE  requires embeddings
+#   mcp              TRUE  NA
 ```
+
+A layer that did not build carries its reason instead of `NA`: the extension
+manager's own error when an extension cannot be installed, `requires
+embeddings` for FAISS when the embedding step failed, or `db_extensions =
+FALSE` when you never asked for it.
 
 The FAISS index is stored beside the database as `tardoc/*.faiss` rather than inside `tardoc.duckdb` — that is how the extension persists indexes. Keep those files next to the database; `view_tardoc_db()` reloads them on startup and disables semantic search if they are missing.
 
@@ -272,7 +296,10 @@ tardoc::serve_tardoc_mcp()
 
 Starts the `duckdb_mcp` extension as an MCP server, exposing `tardoc.duckdb` as a live data source. Prints a config snippet to paste into your Claude Desktop `claude_desktop_config.json`. Once configured, Claude Desktop and Claude Code can query the pipeline database directly via tool use — no tardoc viewer needed.
 
-A `tardoc/tardoc_mcp_config.json` file is also written at `document_targets()` time for reference.
+**This needs a database built with extensions.** `serve_tardoc_mcp()` reads
+`tardoc/tardoc.duckdb` and the `tardoc/tardoc_mcp_config.json` written beside
+it, and both come from `view_tardoc_db(db_extensions = TRUE)` — neither is
+produced by `document_targets()`. If the database is missing, run that first.
 
 **What this enables:**
 
@@ -308,16 +335,23 @@ Opens `wasm_analytics.html` as `file://`. DuckDB WASM from CDN. Data embedded at
 
 ### `view_tardoc_db()`
 
+Builds `tardoc.duckdb` if it is not already there, then serves it.
+
 | Argument | Default | Description |
 |---|---|---|
+| `project_path` | `"."` | Targets project root |
+| `site_dir` | `"tardoc"` | Output subfolder used by `document_targets()` |
 | `port` | `9000` | httpuv HTML server port |
 | `quack_port` | `9494` | Quack DuckDB server port |
 | `llm_chat` | `NULL` | ellmer Chat for the chat tab |
+| `db_extensions` | `FALSE` | Install the community extensions and rebuild the database. Slow on first run; required for semantic search and MCP |
 
 ### `serve_tardoc_mcp()`
 
 | Argument | Default | Description |
 |---|---|---|
+| `project_path` | `"."` | Targets project root |
+| `site_dir` | `"tardoc"` | Output subfolder used by `document_targets()` |
 | `port` | `8765` | MCP server port |
 
 ### `generate_reactflow_graph(targets_data, cfg, pkg_name)`

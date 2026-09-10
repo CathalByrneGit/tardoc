@@ -69,8 +69,8 @@ generate_tardoc_db <- function(targets_data, function_names, cfg,
   # ---- 3-7. Community extensions (opt-in) ---------------------------------
   if (!isTRUE(db_extensions)) {
     message("  Skipping community extensions (db_extensions = FALSE).")
-    message("  Re-run with db_extensions = TRUE to add semantic search,")
-    message("  code intelligence, git history, and MCP support.")
+    message("  Re-run with db_extensions = TRUE to add semantic search")
+    message("  and MCP support.")
   }
 
   # ---- 3. Embeddings (quackformers) ----------------------------------------
