@@ -7,8 +7,7 @@
 generate_wasm_viewer(analytics_data, cfg, pkg_name = "targets docs")
 }
 \arguments{
-\item{analytics_data}{A list with \code{targets}, \code{functions}, \code{edges} (and
-optionally \code{function_calls}, \code{git_history}) from
+\item{analytics_data}{A list with \code{targets}, \code{functions} and \code{edges}, from
 \code{\link[=.build_analytics_data]{.build_analytics_data()}}.}
 
 \item{cfg}{A site config list.}

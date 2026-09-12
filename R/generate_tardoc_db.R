@@ -7,8 +7,6 @@
 #   2. Always:   built-in FTS index
 #   3. Optional: quackformers  -> BERT embeddings (384-dim)
 #   4. Optional: faiss         -> HNSW32 ANN index on embeddings
-#   5. Optional: sitting_duck  -> function_calls table (R AST)
-#   6. Optional: duck_tails    -> git_history table
 #   7. Optional: duckdb_mcp    -> install extension + write MCP config
 #   8. Always:   _meta (wide flags) + _meta_detail (flags plus skip reason)
 
@@ -24,7 +22,7 @@
 #' @param cfg            A site config list.
 #' @param db_extensions Logical. When `TRUE`, attempts to install community
 #'   extensions: `quackformers` (BERT embeddings), `faiss` (ANN index),
-#'   `sitting_duck` (R code AST), `duck_tails` (git history), `duckdb_mcp`
+#'   `duckdb_mcp`
 #'   (MCP server config). Each step is wrapped in `tryCatch`; a failure skips
 #'   that layer and the reason is recorded in the `_meta_detail` table.
 #'   Default `FALSE` -- core tables and FTS only.
@@ -71,8 +69,8 @@ generate_tardoc_db <- function(targets_data, function_names, cfg,
   # ---- 3-7. Community extensions (opt-in) ---------------------------------
   if (!isTRUE(db_extensions)) {
     message("  Skipping community extensions (db_extensions = FALSE).")
-    message("  Re-run with db_extensions = TRUE to add semantic search,")
-    message("  code intelligence, git history, and MCP support.")
+    message("  Re-run with db_extensions = TRUE to add semantic search")
+    message("  and MCP support.")
   }
 
   # ---- 3. Embeddings (quackformers) ----------------------------------------
@@ -123,15 +121,7 @@ generate_tardoc_db <- function(targets_data, function_names, cfg,
     })
   }
 
-  # ---- 5 & 6. Code intelligence (sitting_duck + duck_tails) ----------------
-  ci <- if (isTRUE(db_extensions)) generate_code_intelligence(con, cfg) else
-          list(has_ast = FALSE, has_git = FALSE,
-               ast_error = "db_extensions = FALSE",
-               git_error = "db_extensions = FALSE")
-  has_ast <- isTRUE(ci$has_ast)
-  has_git <- isTRUE(ci$has_git)
-
-  # ---- 7. duckdb_mcp: install + write config --------------------------------
+  # ---- 5. duckdb_mcp: install + write config --------------------------------
   has_mcp <- FALSE
   mcp_error <- if (!isTRUE(db_extensions)) "db_extensions = FALSE" else NA_character_
   if (isTRUE(db_extensions)) tryCatch({
@@ -145,14 +135,13 @@ generate_tardoc_db <- function(targets_data, function_names, cfg,
     message("  duckdb_mcp unavailable: ", conditionMessage(e))
   })
 
-  # ---- 8. Capability metadata ----------------------------------------------
+  # ---- 6. Capability metadata ----------------------------------------------
   # One row per capability, with the reason it is off. Recording the reason
   # means a FALSE flag is diagnosable instead of just mysterious.
   meta <- data.frame(
-    capability = c("fts", "embeddings", "faiss", "ast", "git", "mcp"),
-    available  = c(has_fts, has_embeddings, has_faiss, has_ast, has_git, has_mcp),
-    reason     = c(fts_error, emb_error, faiss_error,
-                   ci$ast_error, ci$git_error, mcp_error),
+    capability = c("fts", "embeddings", "faiss", "mcp"),
+    available  = c(has_fts, has_embeddings, has_faiss, has_mcp),
+    reason     = c(fts_error, emb_error, faiss_error, mcp_error),
     stringsAsFactors = FALSE
   )
   DBI::dbWriteTable(con, "_meta_detail", meta, overwrite = TRUE)
@@ -161,15 +150,15 @@ generate_tardoc_db <- function(targets_data, function_names, cfg,
   # document, so it stays exactly as it was; _meta_detail carries the reasons.
   DBI::dbExecute(con, sprintf(
     "CREATE TABLE _meta AS SELECT %s AS has_fts, %s AS has_embeddings,
-     %s AS has_faiss, %s AS has_ast, %s AS has_git, %s AS has_mcp",
+     %s AS has_faiss, %s AS has_mcp",
     tolower(has_fts), tolower(has_embeddings), tolower(has_faiss),
-    tolower(has_ast), tolower(has_git), tolower(has_mcp)
+    tolower(has_mcp)
   ))
 
   message("tardoc.duckdb ready: ", db_path)
   message(sprintf(
-    "  FTS=%s  Embeddings=%s  FAISS=%s  AST=%s  Git=%s  MCP=%s",
-    has_fts, has_embeddings, has_faiss, has_ast, has_git, has_mcp
+    "  FTS=%s  Embeddings=%s  FAISS=%s  MCP=%s",
+    has_fts, has_embeddings, has_faiss, has_mcp
   ))
 
   invisible(db_path)

@@ -1,7 +1,7 @@
 # tests/testthat/test-generate_tardoc_db.R
 #
 # Core-tier tests only: db_extensions = FALSE. The community extensions
-# (quackformers, faiss, sitting_duck, duck_tails, duckdb_mcp) are downloaded
+# (quackformers, faiss, duckdb_mcp) are downloaded
 # from the DuckDB registry at build time and are not exercised here.
 
 skip_if_no_duckdb <- function() {
@@ -68,7 +68,7 @@ test_that("_meta exposes the wide capability flags view_tardoc_db reads", {
     DBI::dbGetQuery(con, "SELECT * FROM _meta LIMIT 1"))
   expect_equal(nrow(meta), 1L)
   expect_true(all(c("has_fts", "has_embeddings", "has_faiss",
-                    "has_ast", "has_git", "has_mcp") %in% names(meta)))
+                    "has_mcp") %in% names(meta)))
   expect_type(meta$has_faiss[1], "logical")
 })
 
@@ -79,8 +79,6 @@ test_that("community-extension capabilities are off when db_extensions = FALSE",
     DBI::dbGetQuery(con, "SELECT * FROM _meta LIMIT 1"))
   expect_false(meta$has_embeddings[1])
   expect_false(meta$has_faiss[1])
-  expect_false(meta$has_ast[1])
-  expect_false(meta$has_git[1])
   expect_false(meta$has_mcp[1])
 })
 
@@ -90,7 +88,7 @@ test_that("_meta_detail records why each layer was skipped", {
   detail <- with_con(db$path, function(con)
     DBI::dbGetQuery(con, "SELECT * FROM _meta_detail ORDER BY capability"))
   expect_setequal(detail$capability,
-                  c("ast", "embeddings", "faiss", "fts", "git", "mcp"))
+                  c("embeddings", "faiss", "fts", "mcp"))
   # Every unavailable capability carries a non-empty reason.
   off <- detail[!detail$available, ]
   expect_true(nrow(off) > 0)

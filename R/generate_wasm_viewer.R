@@ -10,8 +10,7 @@
 #' `inst/templates/wasm_analytics.html`. All pipeline data is embedded
 #' directly so the file opens as `file://` with no server required.
 #'
-#' @param analytics_data A list with `targets`, `functions`, `edges` (and
-#'   optionally `function_calls`, `git_history`) from
+#' @param analytics_data A list with `targets`, `functions` and `edges`, from
 #'   [.build_analytics_data()].
 #' @param cfg            A site config list.
 #' @param pkg_name       Character. Project title.
