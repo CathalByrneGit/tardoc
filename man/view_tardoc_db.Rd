@@ -29,7 +29,7 @@ Any provider: \code{ellmer::chat_openai()}, \code{ellmer::chat_ollama("llama3.2"
 
 \item{db_extensions}{Logical. Install community DuckDB extensions when
 building \code{tardoc.duckdb}: \code{quackformers} (BERT semantic search), \code{faiss},
-\code{sitting_duck}, \code{duck_tails}, \code{duckdb_mcp}. Slow on first run. Default
+\code{duckdb_mcp}. Slow on first run. Default
 \code{FALSE}.}
 }
 \description{

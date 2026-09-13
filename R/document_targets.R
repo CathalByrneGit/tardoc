@@ -162,7 +162,7 @@ view_wasm_analytics <- function(project_path = ".", site_dir = "tardoc") {
 #' @param quack_port   Port for the Quack DuckDB server. Default `9494`.
 #' @param db_extensions Logical. Install community DuckDB extensions when
 #'   building `tardoc.duckdb`: `quackformers` (BERT semantic search), `faiss`,
-#'   `sitting_duck`, `duck_tails`, `duckdb_mcp`. Slow on first run. Default
+#'   `duckdb_mcp`. Slow on first run. Default
 #'   `FALSE`.
 #' @param llm_chat     An ellmer `Chat` object for the chat interface.
 #'   Any provider: `ellmer::chat_openai()`, `ellmer::chat_ollama("llama3.2")`,

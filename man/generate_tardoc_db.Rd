@@ -15,7 +15,7 @@ generate_tardoc_db(targets_data, function_names, cfg, db_extensions = FALSE)
 
 \item{db_extensions}{Logical. When \code{TRUE}, attempts to install community
 extensions: \code{quackformers} (BERT embeddings), \code{faiss} (ANN index),
-\code{sitting_duck} (R code AST), \code{duck_tails} (git history), \code{duckdb_mcp}
+\code{duckdb_mcp}
 (MCP server config). Each step is wrapped in \code{tryCatch}; a failure skips
 that layer and the reason is recorded in the \verb{_meta_detail} table.
 Default \code{FALSE} -- core tables and FTS only.}

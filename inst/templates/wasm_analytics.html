@@ -36,12 +36,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
 .sba.p{background:#6d28d9;color:#fff}
 .sba.o{background:#313244;color:#a6e3a1;border:1px solid #40a02b}
 #main{flex:1;display:flex;flex-direction:column;overflow:hidden}
-#tabs{display:flex;background:#fff;border-bottom:1px solid #e9ecef;padding:0 16px;flex-shrink:0}
-.tab{padding:10px 16px;border:none;background:none;font-size:13px;cursor:pointer;
-     color:#6c7086;border-bottom:2px solid transparent;font-weight:500}
-.tab.active{color:#6d28d9;border-bottom-color:#6d28d9}
-.panel{display:none;flex-direction:column;flex:1;overflow:hidden}
-.panel.active{display:flex}
+#sql-panel{display:flex;flex-direction:column;flex:1;overflow:hidden}
 #ew{padding:12px 16px;background:#fff;border-bottom:1px solid #e9ecef;flex-shrink:0}
 .mr{display:flex;gap:4px;margin-bottom:6px}
 .mb.active{background:#6d28d9;color:#fff;border-color:#6d28d9}
@@ -55,8 +50,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
 #qt{font-size:11px;color:#6c7086}
 #res{flex:1;overflow:auto;padding:12px 16px}
 #rmeta{font-size:11px;color:#6c7086;margin-bottom:6px}
-#git-panel{flex:1;overflow:auto;padding:12px 16px}
-#calls-panel{flex:1;overflow:auto;padding:12px 16px}
 table{border-collapse:collapse;width:100%;font-size:12px}
 th{background:#f1f3f5;padding:6px 10px;text-align:left;
    border:1px solid #dee2e6;font-weight:600;white-space:nowrap}
@@ -69,7 +62,6 @@ tr:hover td{background:#f8f9fa}
 .ebox{background:#fee2e2;border:1px solid #fca5a5;border-radius:5px;padding:10px;
       font-size:12px;color:#991b1b;font-family:monospace;white-space:pre-wrap}
 .loading{color:#9ca3af;font-style:italic;padding:20px;text-align:center;font-size:13px}
-.empty-note{color:#9ca3af;padding:32px;text-align:center;font-size:13px}
 code{background:#f1f3f5;padding:1px 5px;border-radius:3px;font-size:11px;font-family:monospace}
 </style>
 </head>
@@ -103,13 +95,6 @@ code{background:#f1f3f5;padding:1px 5px;border-radius:3px;font-size:11px;font-fa
     <button class="qb" onclick="runQ(Q.all_t)"><span class="ic">&#127919;</span>All targets</button>
     <button class="qb" onclick="runQ(Q.all_f)"><span class="ic">&#128296;</span>All functions</button>
 
-    <div id="ci-queries" style="display:none">
-      <div class="sbs">Code intelligence</div>
-      <button class="qb" onclick="runQ(Q.fn_complexity)"><span class="ic">&#128208;</span>Function complexity</button>
-      <button class="qb" onclick="runQ(Q.fn_callers)"><span class="ic">&#128279;</span>Who calls what</button>
-      <button class="qb" onclick="runQ(Q.undocumented_calls)"><span class="ic">&#128683;</span>Undocumented calls</button>
-    </div>
-
     <div class="sbs">Lineage</div>
     <input id="lin-i" class="sbi" type="text" placeholder="Target name&hellip;">
     <button class="sba p"  onclick="runUp()">&#8593; Upstream</button>
@@ -118,20 +103,11 @@ code{background:#f1f3f5;padding:1px 5px;border-radius:3px;font-size:11px;font-fa
     <div class="sbs">Tables</div>
     <div style="padding:0 4px;font-size:10px;color:#585b70;line-height:1.8">
       <code>targets</code>&nbsp;<code>functions</code>&nbsp;<code>edges</code>
-      <span id="ci-tables" style="display:none"><br><code>function_calls</code></span>
-      <span id="git-tables" style="display:none"><br><code>git_history</code></span>
     </div>
   </div>
 
   <div id="main">
-    <div id="tabs">
-      <button class="tab active" onclick="showTab('sql')">SQL / dplyr</button>
-      <button class="tab" id="git-tab" style="display:none" onclick="showTab('git')">&#128214; Git history</button>
-      <button class="tab" id="calls-tab" style="display:none" onclick="showTab('calls')">&#128200; Call graph</button>
-    </div>
-
-    <!-- SQL panel -->
-    <div id="sql-panel" class="panel active">
+    <div id="sql-panel">
       <div id="ew">
         <textarea id="sql-ed" spellcheck="false"
           placeholder="SELECT * FROM targets LIMIT 10;&#10;-- dplyr syntax also works if extension loaded&#10;-- Ctrl+Enter to run"></textarea>
@@ -147,23 +123,11 @@ code{background:#f1f3f5;padding:1px 5px;border-radius:3px;font-size:11px;font-fa
         <div id="rtable"></div>
       </div>
     </div>
-
-    <!-- Git history panel -->
-    <div id="git-panel" class="panel">
-      <div id="git-content" class="empty-note">Git history not available for this snapshot.</div>
-    </div>
-
-    <!-- Call graph panel -->
-    <div id="calls-panel" class="panel">
-      <div id="calls-content" class="empty-note">Function call graph not available for this snapshot.</div>
-    </div>
   </div>
 </div>
 
 <script type="module">
 const PKG_NAME  = {{PKG_NAME_JSON}};
-const HAS_CI    = !!(TARDOC.function_calls && TARDOC.function_calls.length > 0);
-const HAS_GIT   = !!(TARDOC.git_history   && TARDOC.git_history.length   > 0);
 
 let conn = null;
 
@@ -172,7 +136,7 @@ async function init() {
   const initMsg = document.getElementById('init-msg');
 
   try {
-    initMsg.textContent = 'Loading DuckDB WASM from CDN&hellip;';
+    initMsg.textContent = 'Loading DuckDB WASM from CDN…';
     const duckdb = await import('https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.32.0/+esm');
     const bundle = await duckdb.selectBundle(duckdb.getJsDelivrBundles());
     const worker = new Worker(URL.createObjectURL(
@@ -183,25 +147,21 @@ async function init() {
     conn = await db.connect();
 
     // Register embedded data as virtual files
-    initMsg.textContent = 'Loading pipeline data&hellip;';
+    initMsg.textContent = 'Loading pipeline data…';
     const tables = [
       ['t', TARDOC.targets],
       ['f', TARDOC.functions],
       ['e', TARDOC.edges]
     ];
-    if (HAS_CI)  tables.push(['ci', TARDOC.function_calls]);
-    if (HAS_GIT) tables.push(['gh', TARDOC.git_history]);
 
     for (const [key, data] of tables) {
       await db.registerFileText(key + '.json', JSON.stringify(data));
     }
 
-    initMsg.textContent = 'Building tables&hellip;';
+    initMsg.textContent = 'Building tables…';
     await conn.query("CREATE TABLE targets   AS SELECT * FROM read_json('t.json')");
     await conn.query("CREATE TABLE functions AS SELECT * FROM read_json('f.json')");
     await conn.query("CREATE TABLE edges     AS SELECT * FROM read_json('e.json')");
-    if (HAS_CI)  await conn.query("CREATE TABLE function_calls AS SELECT * FROM read_json('ci.json')");
-    if (HAS_GIT) await conn.query("CREATE TABLE git_history    AS SELECT * FROM read_json('gh.json')");
 
     // FTS
     try {
@@ -212,19 +172,6 @@ async function init() {
 
     // dplyr
     try { await conn.query("INSTALL dplyr FROM community; LOAD dplyr;"); } catch {}
-
-    // Show optional UI
-    if (HAS_CI) {
-      document.getElementById('ci-queries').style.display = '';
-      document.getElementById('ci-tables').style.display = '';
-      document.getElementById('calls-tab').style.display = '';
-      renderCallGraph();
-    }
-    if (HAS_GIT) {
-      document.getElementById('git-tables').style.display = '';
-      document.getElementById('git-tab').style.display = '';
-      renderGitHistory();
-    }
 
     badge.textContent = 'Ready'; badge.className = 'ok';
     initMsg.style.display = 'none';
@@ -246,10 +193,7 @@ const Q = {
   nodesc:    `SELECT name,command,status FROM targets WHERE description='' ORDER BY name`,
   fnusage:   `SELECT e.from_target fn,COUNT(*) uses,STRING_AGG(e.to_target,', ') targets FROM edges e JOIN functions f ON f.name=e.from_target GROUP BY e.from_target ORDER BY uses DESC`,
   all_t:     `SELECT name,description,status,last_built,n_upstream,n_downstream FROM targets ORDER BY name`,
-  all_f:     `SELECT name,description,source_file FROM functions ORDER BY name`,
-  fn_complexity: `SELECT caller, COUNT(DISTINCT callee) AS calls_out, COUNT(*) AS total_calls FROM function_calls GROUP BY caller ORDER BY calls_out DESC LIMIT 30`,
-  fn_callers: `SELECT callee, COUNT(DISTINCT caller) AS called_by FROM function_calls GROUP BY callee ORDER BY called_by DESC LIMIT 30`,
-  undocumented_calls: `SELECT DISTINCT fc.callee AS undocumented_function, fc.caller, fc.file FROM function_calls fc LEFT JOIN functions f ON f.name = fc.callee WHERE f.name IS NULL ORDER BY fc.callee`
+  all_f:     `SELECT name,description,source_file FROM functions ORDER BY name`
 };
 
 const runQ = s => { document.getElementById('sql-ed').value=s.trim(); exec(s); };
@@ -301,37 +245,6 @@ function tbl(cols,rows,max=500) {
   return h+'</tbody></table></div>';
 }
 
-async function renderGitHistory() {
-  const el = document.getElementById('git-content');
-  try {
-    const r = await conn.query("SELECT file, author, date, message FROM git_history ORDER BY date DESC LIMIT 200");
-    const rows = r.toArray().map(x=>Object.fromEntries(r.schema.fields.map(f=>[f.name,x[f.name]])));
-    el.innerHTML = rows.length ? tbl(['file','author','date','message'], rows) :
-      '<div class="empty-note">No git history found.</div>';
-  } catch(e) { el.innerHTML=`<div class="ebox">${e.message}</div>`; }
-}
-
-async function renderCallGraph() {
-  const el = document.getElementById('calls-content');
-  try {
-    const r = await conn.query("SELECT caller, callee, COUNT(*) n FROM function_calls GROUP BY caller, callee ORDER BY caller, n DESC");
-    const rows = r.toArray().map(x=>Object.fromEntries(r.schema.fields.map(f=>[f.name,x[f.name]])));
-    el.innerHTML = rows.length ? tbl(['caller','callee','n'], rows) :
-      '<div class="empty-note">No function calls recorded.</div>';
-  } catch(e) { el.innerHTML=`<div class="ebox">${e.message}</div>`; }
-}
-
-let activeTab = 'sql';
-function showTab(t) {
-  activeTab = t;
-  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
-  document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
-  document.getElementById(t+'-panel').classList.add('active');
-  const tabs = ['sql','git','calls'];
-  const idx  = tabs.indexOf(t);
-  document.querySelectorAll('.tab')[idx]?.classList.add('active');
-}
-
 let eMode='sql';
 
 document.getElementById('sql-ed').addEventListener('keydown', e => {
@@ -340,7 +253,7 @@ document.getElementById('sql-ed').addEventListener('keydown', e => {
 document.getElementById('fts-i').addEventListener('keydown', e => { if(e.key==='Enter') runFts(); });
 document.getElementById('lin-i').addEventListener('keydown', e => { if(e.key==='Enter') runUp(); });
 
-Object.assign(window, {showTab,  runQ, runFts, runCustom, runUp, runDown, Q});
+Object.assign(window, {runQ, runFts, runCustom, runUp, runDown, Q});
 init();
 </script>
 </body>

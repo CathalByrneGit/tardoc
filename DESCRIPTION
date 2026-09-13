@@ -7,8 +7,7 @@ Description: Auto-generates documentation for targets pipelines across four tier
     (2) A DuckDB WASM analytics viewer with full SQL, BM25 search, dplyr syntax,
     and recursive lineage queries — self-contained, opens as file://;
     (3) A Quack-protocol server analytics viewer with BERT semantic search
-    (quackformers), FAISS ANN index, function call graph (sitting_duck), and
-    git history (duck_tails);
+    (quackformers) and a FAISS ANN index;
     (4) An LLM chat interface over the pipeline database via ellmer, supporting
     OpenAI, Anthropic, Ollama, llama.cpp, and any OpenAI-compatible provider.
     The pipeline database is also exposable as an MCP server (duckdb_mcp) for
