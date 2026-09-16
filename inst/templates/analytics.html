@@ -221,17 +221,25 @@ async function init() {
     }
 
     try {
+      // quack has been a core DuckDB extension since 1.5.3. It was previously
+      // installed FROM core_nightly, which now returns 403 for every platform
+      // and every engine version, so this attach could never succeed.
       try { await conn.query('LOAD quack;'); }
-      catch { await conn.query('INSTALL quack FROM core_nightly; LOAD quack;'); }
+      catch { await conn.query('INSTALL quack; LOAD quack;'); }
       await conn.query(`CREATE SECRET qs (TYPE quack, TOKEN '${QUACK_TOKEN}');`);
       await conn.query(`ATTACH 'quack:localhost:${QUACK_PORT}' AS tardoc (READ_ONLY);`);
       prefix = 'tardoc.';
       badge.textContent = 'Quack'; badge.className = 'ok';
       document.getElementById('mode-chip').textContent = 'Quack';
-    } catch {
+    } catch (e) {
+      // Falling back is fine; falling back silently is not. The reason used to
+      // be swallowed here, so a dead server looked identical to a snapshot.
+      console.warn('Quack attach failed, serving the JSON snapshot:', e);
       await loadJson();
       badge.textContent = 'JSON'; badge.className = '';
-      document.getElementById('mode-chip').textContent = 'JSON';
+      const chip = document.getElementById('mode-chip');
+      chip.textContent = 'JSON';
+      chip.title = 'Quack attach failed: ' + (e && e.message ? e.message : e);
     }
 
     if (HAS_FAISS) document.getElementById('sem-wrap').style.display = '';

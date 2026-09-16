@@ -192,15 +192,31 @@ pass `db_extensions = TRUE` to rebuild with the community extensions.
 
 Then it starts two local services:
 
-- A **DuckDB Quack server** (`callr::r_bg()`) serving `tardoc/tardoc.duckdb` on port 9494. The browser DuckDB WASM connects directly using the [Quack protocol](https://duckdb.org/2026/05/12/quack-remote-protocol) — all queries run server-side.
+- A **DuckDB Quack server** (`callr::r_bg()`) serving `tardoc/tardoc.duckdb` on port 9494. The browser's DuckDB WASM attaches to it with the [Quack protocol](https://duckdb.org/2026/05/12/quack-remote-protocol) and runs every query server-side.
 - A minimal **httpuv** server on port 9000 delivering the session HTML.
 
-Falls back to WASM + JSON mode if Quack is unavailable.
+`view_tardoc_db()` waits for the Quack port to accept a connection before
+handing the page over — typically a few seconds, most of it the one-off
+extension install. If the server does not come up it says why, and the viewer
+serves the JSON snapshot instead, with the reason on the **JSON** chip's
+tooltip and in the browser console.
+
+> **Quack needs a recent DuckDB WASM.** The viewer pins the newest stable
+> `@duckdb/duckdb-wasm` (1.32.0), which bundles DuckDB **1.4.3**. The `quack`
+> extension loads there, but the engine has no `quack` secret type, so
+> `CREATE SECRET (TYPE quack, …)` fails and the viewer falls back to JSON.
+> Verified working on DuckDB **1.5.5**, which today ships only in
+> `@duckdb/duckdb-wasm` prereleases. Until a stable release carries 1.5.3 or
+> newer, tier 3 serves the snapshot — rebuilt on every `view_tardoc_db()`
+> call, so it is current, just not live. The R-side server itself works: any
+> DuckDB 1.5.3+ client can attach to it. Details, evidence and the one-line
+> change to make when a stable build ships:
+> [`docs/quack-remote-access.md`](docs/quack-remote-access.md).
 
 **Additional capabilities over Tier 2:**
 
 - **Semantic search** — off by default. `db_extensions` is `FALSE`, so the first build installs no community extensions. Run `view_tardoc_db(db_extensions = TRUE)` once and, if `quackformers` and `faiss` can be installed, BERT embeddings (all-MiniLM-L6-v2, 384-dim) and a HNSW32 FAISS index are stored in the database. "Find targets related to outlier removal" then works even when those words don't appear in descriptions.
-- **Live data** — queries run against the current database state, not a snapshot
+- **Live data** — when Quack attaches, queries run against the current database state rather than a snapshot. See the note above on which DuckDB WASM builds can attach.
 
 **`tardoc.duckdb` capability flags** — check what was built:
 

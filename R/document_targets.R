@@ -270,11 +270,22 @@ view_tardoc_db <- function(project_path = ".", site_dir = "tardoc",
               }
             }, silent = TRUE)
           }
-          DBI::dbExecute(con, "INSTALL quack FROM core_nightly; LOAD quack;")
+          # quack is a core extension as of DuckDB 1.5.3; the nightly
+          # repository no longer serves it (HTTP 403 for every platform).
+          tryCatch(
+            DBI::dbExecute(con, "LOAD quack;"),
+            error = function(e) DBI::dbExecute(con, "INSTALL quack; LOAD quack;")
+          )
           DBI::dbExecute(con, sprintf(
             "CALL quack_serve('quack:localhost:%d', token = '%s');",
             quack_port, token
           ))
+          # quack_serve() returns as soon as the listener is bound -- the
+          # server runs on a thread inside this DuckDB instance. Without this
+          # park the function would return, callr would exit the process, and
+          # the server would die about a second after starting. supervise =
+          # TRUE ends the process with the parent R session.
+          repeat Sys.sleep(86400)
         },
         args = list(db_path, token, quack_port, faiss_paths),
         supervise = TRUE
@@ -284,11 +295,7 @@ view_tardoc_db <- function(project_path = ".", site_dir = "tardoc",
         NULL
       }
     )
-    Sys.sleep(1.5)
-    if (!is.null(quack_proc) && !quack_proc$is_alive()) {
-      message("Quack exited early -- JSON fallback.")
-      quack_proc <- NULL
-    }
+    quack_proc <- .await_quack(quack_proc, quack_port)
   }
 
   session_path <- inject_quack_session(
@@ -546,6 +553,53 @@ serve_tardoc_mcp <- function(project_path = ".", site_dir = "tardoc", port = 876
 
 `%||%` <- function(x, y) if (is.null(x)) y else x
 
+
+#' Wait for the background Quack server to accept connections
+#'
+#' Polls the port rather than sleeping a fixed interval and checking
+#' `is_alive()`. That check was a race: `quack_serve()` returns immediately and
+#' the process used to exit right behind it, so liveness at an arbitrary moment
+#' said nothing about whether the browser would be able to attach. A successful
+#' TCP connect does.
+#'
+#' @param proc A `callr` process, or `NULL`.
+#' @param port Integer. The Quack port.
+#' @param timeout Numeric. Seconds to wait before giving up.
+#'
+#' @return `proc` when the port is accepting connections, otherwise `NULL`
+#'   after reporting why -- the caller then falls back to JSON.
+#' @keywords internal
+.await_quack <- function(proc, port, timeout = 15) {
+  if (is.null(proc)) return(NULL)
+  deadline <- Sys.time() + timeout
+  repeat {
+    if (!proc$is_alive()) {
+      # The last non-empty stderr line is the R error that stopped it -- the
+      # reason was previously discarded, leaving an unexplained fallback.
+      err   <- tryCatch(proc$read_all_error(), error = function(e) "")
+      lines <- trimws(strsplit(err, "\n", fixed = TRUE)[[1]])
+      lines <- lines[nzchar(lines)]
+      why   <- if (length(lines)) paste0(" (", lines[length(lines)], ")") else ""
+      message("Quack exited early", why, " -- JSON fallback.")
+      return(NULL)
+    }
+    ok <- tryCatch({
+      con <- suppressWarnings(
+        socketConnection("localhost", port, blocking = TRUE, timeout = 1)
+      )
+      close(con)
+      TRUE
+    }, error = function(e) FALSE)
+    if (ok) return(proc)
+    if (Sys.time() > deadline) {
+      message("Quack did not accept connections within ", timeout,
+              "s -- JSON fallback.")
+      proc$kill()
+      return(NULL)
+    }
+    Sys.sleep(0.25)
+  }
+}
 
 #' Find a free TCP port starting from the given port
 #' @keywords internal
