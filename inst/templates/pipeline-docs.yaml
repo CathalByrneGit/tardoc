@@ -1,0 +1,119 @@
+# tardoc — publish your targets pipeline's docs to GitHub Pages.
+#
+# Copy this to .github/workflows/docs.yaml in your pipeline repository, then
+# enable Pages under Settings → Pages → Source: GitHub Actions.
+#
+#   r <- system.file("templates", "pipeline-docs.yaml", package = "tardoc")
+#   dir.create(".github/workflows", recursive = TRUE, showWarnings = FALSE)
+#   file.copy(r, ".github/workflows/docs.yaml")
+#
+# Two jobs:
+#
+#   build   regenerates the docs and publishes them. The site is rebuilt from
+#           _targets.R on every push, so it cannot drift from the pipeline.
+#   stale   fails the build when the committed tardoc/ no longer matches what
+#           document_targets() produces. Only useful if you commit tardoc/;
+#           delete the job if you do not.
+#
+# Whether to run the pipeline in CI is the one real decision here. tar_make()
+# is not required — tar_manifest() and tar_network() read _targets.R alone, so
+# the docs build fine without a store. Running it adds build status, timings
+# and sizes, and marks which targets are outdated. If your pipeline is slow,
+# needs credentials, or touches data CI cannot see, drop the tar_make() step:
+# every page still renders, with status reported as "Not built".
+
+name: docs
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          # Your pipeline's own packages come from DESCRIPTION or renv.lock;
+          # add any it needs that are not declared there.
+          extra-packages: |
+            github::CathalByrneGit/tardoc
+            any::targets
+
+      # Optional — see the note at the top of this file.
+      - name: Run the pipeline
+        run: targets::tar_make()
+        shell: Rscript {0}
+
+      - name: Generate the documentation
+        run: |
+          tardoc::document_targets(
+            pkg_name = Sys.getenv("GITHUB_REPOSITORY"),
+            repo_url = paste0("https://github.com/",
+                              Sys.getenv("GITHUB_REPOSITORY"), "/blob/main/")
+          )
+          file.copy("tardoc/viewer.html", "tardoc/index.html", overwrite = TRUE)
+        shell: Rscript {0}
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: tardoc
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
+
+  # Delete this job if you do not commit tardoc/ to the repository.
+  stale:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          extra-packages: |
+            github::CathalByrneGit/tardoc
+            any::targets
+
+      - name: Committed docs match _targets.R
+        run: |
+          # No tar_make() here: without a store every status is "Not built",
+          # which is stable across runs. Comparing built status in CI would
+          # flag timestamps that legitimately change on every run.
+          tardoc::document_targets(pkg_name = Sys.getenv("GITHUB_REPOSITORY"))
+        shell: Rscript {0}
+
+      - name: Fail if regenerating changed anything
+        run: |
+          if [ -n "$(git status --porcelain tardoc/)" ]; then
+            echo "::error::tardoc/ is out of date. Run tardoc::document_targets() and commit the result."
+            git --no-pager diff --stat tardoc/
+            exit 1
+          fi

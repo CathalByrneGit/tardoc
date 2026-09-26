@@ -15,7 +15,8 @@ document_targets(
   llm_provider = "openai",
   llm_model = NULL,
   llm_api_key = NULL,
-  llm_base_url = NULL
+  llm_base_url = NULL,
+  check_outdated = TRUE
 )
 }
 \arguments{
@@ -44,6 +45,11 @@ function explanations via an LLM. Default \code{FALSE}.}
 
 \item{llm_base_url}{Base URL for \code{"openai_compatible"} provider (e.g. a
 llama.cpp server: \code{"http://localhost:8080/v1"}).}
+
+\item{check_outdated}{Logical. Call \code{\link[targets:tar_outdated]{targets::tar_outdated()}} so pages and
+the graph can tell a stale target from a current one. It re-hashes
+dependencies, so pass \code{FALSE} on a large pipeline to skip it; status then
+falls back to reporting errors only.}
 }
 \value{
 The \code{cfg} list, invisibly.

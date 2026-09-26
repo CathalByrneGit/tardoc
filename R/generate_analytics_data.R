@@ -27,7 +27,9 @@ generate_analytics_data <- function(targets_data, function_names, cfg) {
 
     description <- .pull_description_a(manifest_row)
     command     <- dplyr::pull(manifest_row, "command")
-    status      <- if (is.na(meta_row$error)) "uptodate" else "errored"
+    status      <- .target_status(target_name, targets_data$meta,
+                                 targets_data$outdated,
+                                 isTRUE(targets_data$has_store))
     last_built  <- as.character(meta_row$time)
 
     list(

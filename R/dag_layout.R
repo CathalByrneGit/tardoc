@@ -124,12 +124,10 @@ build_dag_graph <- function(targets_data, include_functions = TRUE) {
   )
   edges <- edges[edges$from %in% keep_names & edges$to %in% keep_names, , drop = FALSE]
 
-  pos      <- dag_layout(keep_names, edges)
-  meta     <- targets_data$meta
-  manifest <- targets_data$manifest
+  pos <- dag_layout(keep_names, edges)
 
   nodes <- lapply(seq_len(nrow(pos)), function(i) {
-    .dag_node(pos[i, ], verts, meta, manifest, edges)
+    .dag_node(pos[i, ], targets_data, verts, edges)
   })
 
   edge_list <- lapply(seq_len(nrow(edges)), function(i) {
@@ -142,82 +140,31 @@ build_dag_graph <- function(targets_data, include_functions = TRUE) {
 
 #' Build one graph node
 #'
-#' Split out of [build_dag_graph()] so that function stays within the project's
-#' complexity budget: assembling a node touches four data sources and a dozen
-#' optional fields.
+#' Split out of [build_dag_graph()] so that function stays within the
+#' project's complexity budget. The node's content comes from
+#' [.target_facts()], the same call the target's markdown page makes, so the
+#' inspect panel and the page cannot drift apart.
 #'
 #' @param prow One row of the [dag_layout()] result.
-#' @param verts,meta,manifest,edges Data frames from [build_dag_graph()].
+#' @param targets_data Output of [load_targets_data()].
+#' @param verts,edges Data frames from [build_dag_graph()].
 #' @return A list describing one node.
 #' @keywords internal
-.dag_node <- function(prow, verts, meta, manifest, edges) {
+.dag_node <- function(prow, targets_data, verts, edges) {
   nm   <- prow$name
   vrow <- verts[verts$name == nm, , drop = FALSE]
-  mrow <- meta[meta$name == nm, , drop = FALSE]
-  frow <- manifest[manifest$name == nm, , drop = FALSE]
+  kind <- if (nrow(vrow) && "type" %in% names(vrow) &&
+              !is.na(vrow$type[1])) as.character(vrow$type[1]) else "stem"
 
-  chr1 <- function(x) if (length(x) == 0 || is.na(x[1])) "" else as.character(x[1])
-  num1 <- function(df, col) {
-    if (!is.null(df) && nrow(df) && col %in% names(df) && !is.na(df[[col]][1])) {
-      as.numeric(df[[col]][1])
-    } else {
-      NA
-    }
-  }
-  fld <- function(df, col) if (nrow(df) && col %in% names(df)) chr1(df[[col]]) else ""
+  f <- .target_facts(nm, targets_data, kind = kind)
 
-  kind <- chr1(vrow$type)
-  if (!nzchar(kind)) kind <- "stem"
-
-  status <- if (kind == "function") {
-    "function"
-  } else if (nrow(mrow) == 0 || is.na(mrow$error[1])) {
-    "uptodate"
-  } else {
-    "errored"
-  }
-
-  # Branching comes from the vertex type or the manifest's `pattern` -- the
-  # target's own declaration, known without a store. meta$children is only ever
-  # a count, never the signal: targets records branch names against a plain stem
-  # that a pattern maps over.
-  pattern  <- fld(frow, "pattern")
-  branched <- kind == "pattern" || nzchar(pattern)
-  n_branch <- num1(vrow, "branches")
-  if (is.na(n_branch) && branched && nrow(mrow) && "children" %in% names(mrow)) {
-    kids <- mrow$children[[1]]
-    n_branch <- if (is.null(kids)) 0 else sum(!is.na(kids))
-  }
-  if (is.na(n_branch) || !branched) n_branch <- 0
-
-  desc <- fld(frow, "description")
-  if (!nzchar(desc)) desc <- fld(vrow, "description")
-
-  secs  <- num1(vrow, "seconds"); if (is.na(secs))  secs  <- num1(mrow, "seconds")
-  bytes <- num1(vrow, "bytes");   if (is.na(bytes)) bytes <- num1(mrow, "bytes")
-
-  list(
-    id          = nm,
-    label       = nm,
-    kind        = kind,
-    status      = status,
-    description = desc,
-    command     = fld(frow, "command"),
-    last_built  = if (nrow(mrow)) chr1(as.character(mrow$time)) else "",
-    error       = fld(mrow, "error"),
-    warnings    = fld(mrow, "warnings"),
-    pattern     = pattern,
-    branched    = branched,
-    n_branches  = as.integer(n_branch),
-    format      = fld(frow, "format"),
-    repository  = fld(frow, "repository"),
-    iteration   = fld(frow, "iteration"),
-    seconds     = secs,
-    bytes       = bytes,
-    upstream    = as.list(edges$from[edges$to   == nm]),
-    downstream  = as.list(edges$to[edges$from == nm]),
-    page        = paste0(if (kind == "function") "functions/" else "targets/",
-                         nm, ".md"),
+  c(f, list(
+    id         = nm,
+    label      = nm,
+    upstream   = as.list(edges$from[edges$to   == nm]),
+    downstream = as.list(edges$to[edges$from == nm]),
+    page       = paste0(if (kind == "function") "functions/" else "targets/",
+                        nm, ".md"),
     x = prow$x, y = prow$y, layer = prow$layer
-  )
+  ))
 }

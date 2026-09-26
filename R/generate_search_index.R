@@ -16,14 +16,15 @@
 generate_search_index <- function(targets_data, function_names, cfg) {
   target_entries <- lapply(targets_data$target_names, function(target_name) {
     manifest_row <- dplyr::filter(targets_data$manifest, .data$name == target_name)
-    meta_row     <- dplyr::filter(targets_data$meta,     .data$name == target_name)
     dep          <- get_target_network_dependencies(
       target_name, targets_data$network, max_depth_up = 1, max_depth_down = 1
     )
 
     description <- .pull_description(manifest_row)
     command     <- dplyr::pull(manifest_row, "command")
-    status      <- if (is.na(meta_row$error)) "uptodate" else "errored"
+    status      <- .target_status(target_name, targets_data$meta,
+                                 targets_data$outdated,
+                                 isTRUE(targets_data$has_store))
 
     list(
       type        = "target",
@@ -33,6 +34,8 @@ generate_search_index <- function(targets_data, function_names, cfg) {
       upstream    = as.list(dep$upstream),
       downstream  = as.list(dep$downstream),
       status      = status,
+      # The badge shows the label; the class is keyed off `status`.
+      status_label = .status_label(status),
       file        = paste0("targets/", target_name, ".md")
     )
   })

@@ -54,13 +54,14 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
 .badge{display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;margin-left:8px}
 .badge-ok{background:#d1fae5;color:#065f46}
 .badge-err{background:#fee2e2;color:#991b1b}
+.badge-warn{background:#fef3c7;color:#92400e}
 .badge-na{background:#f3f4f6;color:#6b7280}
 #main{flex:1;overflow:hidden;display:flex;flex-direction:column}
 #content-area{flex:1;overflow-y:auto;padding:32px 40px}
 #home-panel{max-width:900px;margin:0 auto}
 #home-panel h1{font-size:28px;margin-bottom:8px}
 #home-panel p{color:#6c7086;font-size:15px;margin-bottom:24px}
-.stat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:24px 0}
+.stat-grid{display:grid;gap:12px;margin:24px 0;grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
 .stat-card{background:#fff;border:1px solid #e9ecef;border-radius:8px;padding:16px;text-align:center}
 .stat-number{font-size:32px;font-weight:700;color:#6d28d9}
 .stat-label{font-size:13px;color:#6c7086;margin-top:4px}
@@ -103,6 +104,8 @@ a{color:#6d28d9;text-decoration:none}a:hover{text-decoration:underline}
 #rf-panel .tag{font-size:10px;padding:2px 7px;border-radius:9px;background:#313244;color:#9399b2}
 #rf-panel .tag.uptodate{color:#a6e3a1}
 #rf-panel .tag.errored{color:#f38ba8}
+#rf-panel .tag.outdated{color:#f9e2af}
+#rf-panel .tag.unbuilt{color:#6c7086}
 #rf-panel .tag.branched{color:#f9e2af}
 #rf-panel h4{font-size:10px;text-transform:uppercase;letter-spacing:.09em;color:#6c7086;
   margin:14px 0 5px;font-weight:600}
@@ -124,10 +127,14 @@ a{color:#6d28d9;text-decoration:none}a:hover{text-decoration:underline}
   min-width:132px;color:#cdd6f4;font-size:12.5px;line-height:1.35;cursor:pointer}
 .tnode:hover{border-color:#a78bfa}
 .tnode.errored{border-color:#f38ba8}
+.tnode.outdated{border-color:#f9e2af}
+.tnode.unbuilt{border-style:dotted;opacity:.75}
 .tnode .nm{font-weight:600}
 .tnode .st{font-size:10.5px;color:#6c7086;margin-top:2px}
 .tnode.uptodate .st{color:#a6e3a1}
 .tnode.errored .st{color:#f38ba8}
+.tnode.outdated .st{color:#f9e2af}
+.tnode.unbuilt .st{color:#6c7086}
 .tnode .br{font-size:10px;color:#f9e2af;margin-top:1px}
 .react-flow__node.selected .tnode{border-color:#a78bfa}
 .notes-section{margin-top:32px;padding:20px 24px;background:#fffbf0;
@@ -176,6 +183,10 @@ a{color:#6d28d9;text-decoration:none}a:hover{text-decoration:underline}
           <div class="stat-number" id="stat-status">-</div>
           <div class="stat-label">Up-to-date</div>
         </div>
+        <div class="stat-card" id="stat-outdated-card" style="display:none">
+          <div class="stat-number" id="stat-outdated">-</div>
+          <div class="stat-label">Outdated</div>
+        </div>
       </div>
       <h2>Pipeline overview</h2>
       <p class="graph-hint">Click a node for details &middot; drag to pan &middot; scroll to zoom
@@ -208,6 +219,13 @@ document.getElementById('stat-targets').textContent   = targets.length;
 document.getElementById('stat-functions').textContent = functions.length;
 document.getElementById('stat-status').textContent    =
   targets.filter(t => t.status === 'uptodate').length;
+// Only shown when there is something to report -- a fully current pipeline
+// does not need a zero staring at it.
+const nOutdated = targets.filter(t => t.status === 'outdated').length;
+if (nOutdated > 0) {
+  document.getElementById('stat-outdated').textContent = nOutdated;
+  document.getElementById('stat-outdated-card').style.display = '';
+}
 
 // ---- pipeline overview: React Flow ---------------------------------------
 // GRAPH carries positions computed by dag_layout() in R, because React Flow
@@ -260,10 +278,12 @@ function rfOpen(id) {
   if (n.repository && n.repository !== 'local') kv.push(['Repository', n.repository]);
   if (n.iteration && n.iteration !== 'vector')  kv.push(['Iteration', n.iteration]);
   if (n.last_built) kv.push(['Last built', n.last_built]);
+  if (n.progress)   kv.push(['Last run', n.progress]);
   const secs = fmtSecs(n.seconds); if (secs) kv.push(['Runtime', secs]);
   const size = fmtBytes(n.bytes);  if (size) kv.push(['Size', size]);
 
-  const tags = ['<span class="tag ' + rfEsc(n.status) + '">' + rfEsc(n.status) + '</span>'];
+  const tags = ['<span class="tag ' + rfEsc(n.status) + '">' +
+                rfEsc(n.status_label || n.status) + '</span>'];
   if (n.branched) {
     tags.push('<span class="tag branched">' +
       (n.n_branches ? n.n_branches + ' branches' : 'branched') + '</span>');
@@ -333,7 +353,7 @@ function renderLocalGraph(host, centre) {
       data: { label: rce('div', { className: cls },
         rce('div', { className: 'nm' }, n.label),
         rce('div', { className: 'st' },
-            n.kind === 'function' ? 'function' : n.status)) },
+            n.kind === 'function' ? 'function' : (n.status_label || n.status))) },
       sourcePosition: RFC.Position.Right,
       targetPosition: RFC.Position.Left,
       style: { background: 'transparent', border: 'none', padding: 0, width: 'auto' }
@@ -379,7 +399,7 @@ function renderOverview(showFunctions) {
   const rfNodes = visible.map(function (n) {
     const kids = [rce('div', { className: 'nm' }, n.label),
                   rce('div', { className: 'st' },
-                      n.kind === 'function' ? 'function' : n.status)];
+                      n.kind === 'function' ? 'function' : (n.status_label || n.status))];
     if (n.branched) {
       kids.push(rce('div', { className: 'br' },
         n.n_branches ? n.n_branches + ' branches' : 'branched'));
@@ -470,10 +490,12 @@ function renderNavList(filter, tab) {
     div.className = 'nav-item' +
       (currentKey === tab + ':' + item.name ? ' active' : '');
     if (tab === 'targets') {
-      const cls = item.status === 'uptodate'  ? 'badge-ok'  :
-                  item.status === 'errored'    ? 'badge-err' : 'badge-na';
+      const cls = item.status === 'uptodate' ? 'badge-ok'   :
+                  item.status === 'errored'  ? 'badge-err'  :
+                  item.status === 'outdated' ? 'badge-warn' : 'badge-na';
       div.innerHTML = item.name +
-        '<span class="badge ' + cls + '">' + (item.status || '?') + '</span>';
+        '<span class="badge ' + cls + '">' +
+        (item.status_label || item.status || '?') + '</span>';
     } else {
       div.textContent = item.name;
     }
