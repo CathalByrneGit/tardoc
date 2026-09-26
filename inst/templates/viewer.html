@@ -158,6 +158,18 @@ a{color:#6d28d9;text-decoration:none}a:hover{text-decoration:underline}
 .notes-section h2{font-size:16px;color:#92400e;margin-bottom:12px;margin-top:0}
 .notes-section p,.notes-section li{font-size:14px;color:#451a03;line-height:1.7}
 .no-content{color:#6c7086;font-style:italic;padding:40px;text-align:center}
+/* Sticky, so you always know which group you are scrolling through. */
+.nav-group{position:sticky;top:0;z-index:1;background:#181825;
+           display:flex;justify-content:space-between;align-items:center;
+           padding:7px 16px 5px;font-size:10px;font-weight:600;color:#6c7086;
+           text-transform:uppercase;letter-spacing:.7px;
+           border-bottom:1px solid #313244}
+.nav-group span{font-weight:500;letter-spacing:0;text-transform:none;font-size:11px}
+.nav-more{padding:10px 16px;font-size:11px;color:#6c7086;cursor:pointer;
+          border-top:1px solid #313244;margin-top:4px}
+.nav-more:hover{background:#313244;color:#cdd6f4}
+.nav-more b{color:#cba6f7;font-weight:600}
+.nav-more-hint{margin-top:2px;font-size:10px;color:#585b70;cursor:default}
 .search-result{padding:10px 16px;cursor:pointer;border-radius:6px;margin:2px 0}
 .search-result:hover{background:#313244}
 .search-result-name{font-size:13px;color:#cdd6f4}
@@ -607,41 +619,146 @@ function showTab(tab) {
     el.classList.toggle('active', (i === 0 && tab === 'targets') ||
                                    (i === 1 && tab === 'functions'));
   });
-  renderNavList(null, tab);
+  renderNav();
 }
 
-function renderNavList(filter, tab) {
-  const list  = document.getElementById('nav-list');
-  list.innerHTML = '';
-  const items = tab === 'targets' ? targets : functions;
-  const shown = filter
-    ? items.filter(i =>
-        i.name.toLowerCase().includes(filter.toLowerCase()) ||
-        (i.description || '').toLowerCase().includes(filter.toLowerCase()))
-    : items;
+// ---- sidebar -------------------------------------------------------------
+//
+// A flat list does not survive scale. On a 420-target pipeline it was 12,600px
+// of undifferentiated scroll -- a 900px viewport showed 7% of it -- and
+// loadPage() rebuilt all 420 nodes on every click just to move the .active
+// class. So: group, cap, and let search reach the rest.
+//
+// The groups are chosen so the default view answers a question. Errored and
+// outdated targets are listed in full because they are the reason you opened
+// the page; the healthy majority is capped, because the first 40 of 400
+// alphabetically is not information.
 
-  if (shown.length === 0) {
-    list.innerHTML = '<div class="no-content">No results</div>';
-    return;
+const NAV_CAP = 40;
+let navExpanded = { targets: false, functions: false };
+
+function navGroups(tab) {
+  if (tab === 'functions') {
+    // Functions group by the file that defines them -- the structure their
+    // author already chose. Falls back to one group when unknown.
+    const byFile = {};
+    functions.forEach(function (f) {
+      const k = f.source_file || 'R';
+      (byFile[k] = byFile[k] || []).push(f);
+    });
+    return Object.keys(byFile).sort().map(k => ({ label: k, items: byFile[k], always: false }));
   }
-  shown.forEach(item => {
-    const div = document.createElement('div');
-    div.className = 'nav-item' +
-      (currentKey === tab + ':' + item.name ? ' active' : '');
-    if (tab === 'targets') {
-      const cls = item.status === 'uptodate' ? 'badge-ok'   :
-                  item.status === 'errored'  ? 'badge-err'  :
-                  item.status === 'outdated' ? 'badge-warn' : 'badge-na';
-      div.innerHTML = item.name +
-        '<span class="badge ' + cls + '">' +
-        (item.status_label || item.status || '?') + '</span>';
-    } else {
-      div.textContent = item.name;
+  const of = st => targets.filter(t => t.status === st);
+  return [
+    { label: 'Errored',    items: of('errored'),  always: true  },
+    { label: 'Outdated',   items: of('outdated'), always: true  },
+    { label: 'Not built',  items: of('unbuilt'),  always: true  },
+    { label: 'Up to date', items: of('uptodate'), always: false }
+  ].filter(g => g.items.length);
+}
+
+function navItemHtml(item, tab) {
+  const key = tab + ':' + item.name;
+  if (tab === 'functions') {
+    return '<div class="nav-item" data-key="' + rfEsc(key) + '">' +
+           rfEsc(item.name) + '</div>';
+  }
+  const cls = item.status === 'uptodate' ? 'badge-ok'   :
+              item.status === 'errored'  ? 'badge-err'  :
+              item.status === 'outdated' ? 'badge-warn' : 'badge-na';
+  return '<div class="nav-item" data-key="' + rfEsc(key) + '">' +
+         rfEsc(item.name) + '<span class="badge ' + cls + '">' +
+         rfEsc(item.status_label || item.status || '?') + '</span></div>';
+}
+
+function renderNavList(tab) {
+  const list = document.getElementById('nav-list');
+  const groups = navGroups(tab);
+  const total = groups.reduce((n, g) => n + g.items.length, 0);
+
+  if (!total) { list.innerHTML = '<div class="no-content">Nothing here</div>'; return; }
+
+  // Groups that always show (errored, outdated) are never truncated; the
+  // remaining budget is what the rest share.
+  const expanded = navExpanded[tab];
+  let budget = expanded ? Infinity
+             : Math.max(NAV_CAP - groups.filter(g => g.always)
+                                        .reduce((n, g) => n + g.items.length, 0), 10);
+
+  let html = '', shown = 0;
+  groups.forEach(function (g) {
+    const take = g.always ? g.items.length : Math.min(g.items.length, budget);
+    if (!g.always) budget -= take;
+    if (take <= 0) return;
+    shown += take;
+    // A single group covering everything is not worth a header.
+    if (groups.length > 1) {
+      html += '<div class="nav-group">' + rfEsc(g.label) +
+              '<span>' + g.items.length + '</span></div>';
     }
-    div.onclick = () => loadPage(tab, item.name);
-    list.appendChild(div);
+    html += g.items.slice(0, take).map(i => navItemHtml(i, tab)).join('');
+  });
+
+  if (shown < total) {
+    html += '<div class="nav-more" data-expand="' + tab + '">' +
+            'Showing ' + shown + ' of ' + total + ' &middot; <b>show all</b>' +
+            '<div class="nav-more-hint">or search to narrow</div></div>';
+  } else if (expanded && total > NAV_CAP) {
+    html += '<div class="nav-more" data-collapse="' + tab + '">' +
+            'Showing all ' + total + ' &middot; <b>show fewer</b></div>';
+  }
+
+  list.innerHTML = html;
+  markActive();
+}
+
+// Attribute selectors need quoting; target names are R symbols, but a pattern
+// name can carry characters a bare selector would choke on.
+function cssEscape(v) { return String(v).replace(/["\\]/g, '\\$&'); }
+
+// Moving the highlight used to re-render the entire list: 41ms per click on
+// 420 targets, for one class change. It is now a class swap, plus one pin.
+function markActive() {
+  const list = document.getElementById('nav-list');
+  // Navigating to something the cap hides left the sidebar with no indication
+  // of where you were. Pin it at the top so there is always an anchor.
+  const pinned = list.querySelector('.nav-pin');
+  if (pinned) pinned.remove();
+  const stale = list.querySelector('.nav-pin-head');
+  if (stale) stale.remove();
+
+  if (currentKey && !list.querySelector('[data-key="' + cssEscape(currentKey) + '"]')) {
+    const at   = currentKey.indexOf(':');
+    const tab  = currentKey.slice(0, at);
+    const nm   = currentKey.slice(at + 1);
+    const item = (tab === 'targets' ? targets : functions).find(x => x.name === nm);
+    if (item) {
+      list.insertAdjacentHTML('afterbegin',
+        '<div class="nav-group nav-pin-head">Current<span>1</span></div>' +
+        navItemHtml(item, tab).replace('class="nav-item"', 'class="nav-item nav-pin"'));
+    }
+  }
+
+  list.querySelectorAll('.nav-item, .search-result').forEach(function (el) {
+    el.classList.toggle('active', el.getAttribute('data-key') === currentKey);
   });
 }
+
+// One delegated listener rather than a closure per item.
+document.getElementById('nav-list').addEventListener('click', function (ev) {
+  const more = ev.target.closest('[data-expand], [data-collapse]');
+  if (more) {
+    const tab = more.getAttribute('data-expand') || more.getAttribute('data-collapse');
+    navExpanded[tab] = more.hasAttribute('data-expand');
+    renderNavList(tab);
+    return;
+  }
+  const row = ev.target.closest('[data-key]');
+  if (!row) return;
+  const key = row.getAttribute('data-key');
+  const at  = key.indexOf(':');
+  loadPage(key.slice(0, at), key.slice(at + 1));
+});
 
 function loadPage(type, name) {
   const key  = type + ':' + name;
@@ -652,7 +769,7 @@ function loadPage(type, name) {
   if (location.hash.slice(1) !== key) {
     history.replaceState(null, '', '#' + key);
   }
-  renderNavList(document.getElementById('search-box').value, currentTab);
+  markActive();
 
   document.getElementById('home-panel').style.display   = 'none';
   document.getElementById('page-content').style.display = '';
@@ -707,7 +824,7 @@ function goHome() {
   document.getElementById('home-panel').style.display   = '';
   document.getElementById('page-content').style.display = 'none';
   currentKey = null;
-  renderNavList(null, currentTab);
+  renderNav();
 }
 
 // Pan/zoom state
@@ -728,36 +845,67 @@ window.addEventListener('hashchange', openFromHash);
 
 // Fuse.js search
 const fuse = new Fuse([...targets, ...functions], {
-  keys: ['name', 'description', 'command'],
-  threshold: 0.35,
+  // ignoreLocation matters here: without it Fuse only scores matches near the
+  // start of a field, so a name like "clean_station_readings" would not match
+  // "station". The threshold is tighter than the default because at 400+
+  // targets a loose one fills the list with near-misses -- "eval_01" matched
+  // a hundred rows before.
+  keys: [{ name: 'name', weight: 3 }, 'description', 'command'],
+  threshold: 0.3,
+  ignoreLocation: true,
+  minMatchCharLength: 2,
   includeScore: true
 });
 
-document.getElementById('search-box').addEventListener('input', function() {
-  const q = this.value.trim();
-  if (!q) { renderNavList(null, currentTab); return; }
-  const results = fuse.search(q).slice(0, 30);
+// There used to be two searches. Typing ran Fuse and wrote results straight
+// into the list; renderNavList() did its own substring filter. Clicking a
+// result called loadPage(), which re-rendered with the substring one -- so on
+// the large pipeline, searching "eval" showed 30 ranked matches and clicking
+// one silently replaced them with 70 different rows. Now there is one path.
+
+const SEARCH_CAP = 60;
+
+function renderSearch(q) {
   const list = document.getElementById('nav-list');
-  list.innerHTML = '';
-  if (results.length === 0) {
-    list.innerHTML = '<div class="no-content">No results</div>';
+  const all  = fuse.search(q);
+  if (!all.length) {
+    list.innerHTML = '<div class="no-content">No matches for &ldquo;' +
+                     rfEsc(q) + '&rdquo;</div>';
     return;
   }
-  results.forEach(r => {
-    const item = r.item;
-    const div  = document.createElement('div');
-    div.className = 'search-result' +
-      (currentKey === item.type + ':' + item.name ? ' active' : '');
-    div.innerHTML =
-      '<div class="search-result-name">' + item.name +
-      '<span class="item-type">' + item.type + '</span></div>' +
-      '<div class="search-result-desc">' + (item.description || '') + '</div>';
-    div.onclick = () => loadPage(item.type, item.name);
-    list.appendChild(div);
-  });
-});
+  const shown = all.slice(0, SEARCH_CAP);
+  list.innerHTML =
+    '<div class="nav-group">Matches<span>' +
+      (all.length > shown.length ? shown.length + ' of ' + all.length : all.length) +
+    '</span></div>' +
+    shown.map(function (r) {
+      const it = r.item;
+      return '<div class="search-result" data-key="' +
+               rfEsc(it.type + ':' + it.name) + '">' +
+             '<div class="search-result-name">' + rfEsc(it.name) +
+               '<span class="item-type">' + rfEsc(it.type) + '</span></div>' +
+             (it.description
+               ? '<div class="search-result-desc">' + rfEsc(it.description) + '</div>'
+               : '') +
+             '</div>';
+    }).join('') +
+    (all.length > shown.length
+      ? '<div class="nav-more"><div class="nav-more-hint">' +
+        (all.length - shown.length) + ' more &middot; keep typing to narrow</div></div>'
+      : '');
+  markActive();
+}
 
-renderNavList(null, 'targets');
+// Search spans both tabs deliberately: on a large pipeline you rarely know
+// whether what you are after is a target or the function behind it.
+function renderNav() {
+  const q = document.getElementById('search-box').value.trim();
+  if (q) renderSearch(q); else renderNavList(currentTab);
+}
+
+document.getElementById('search-box').addEventListener('input', renderNav);
+
+renderNavList('targets');
 
 // A deep link wins over the default home view.
 openFromHash();

@@ -69,6 +69,11 @@ my_project/
 
 - An interactive pipeline graph on the home page — drag to pan, scroll to zoom, minimap, and a **show functions** toggle that adds the functions each target calls as dashed nodes
 - Click any node to open an inspect panel: description, command, branching pattern, errors, build details, and clickable upstream / downstream neighbours
+- **A sidebar that survives scale** — targets are grouped by status, with errored and outdated listed in full and the healthy majority capped. Functions group by the file that defines them. Search reaches everything else
+
+![The sidebar grouped by status: five outdated targets listed first, then the two that are up to date](man/figures/viewer-sidebar-groups.png)
+
+<sub>The default view answers "what needs attention" rather than listing everything alphabetically. See [On large pipelines](#on-large-pipelines) for how this behaves at 420 targets.</sub>
 - Fuzzy search across targets, functions, descriptions, and commands
 - **Freshness, not just errors** — every target is classified `Up-to-date`, `Outdated`, `Errored` or `Not built`. Outdated comes from [`tar_outdated()`](https://docs.ropensci.org/targets/reference/tar_outdated.html): a target whose command, dependencies or upstream targets changed since it was built, even though it never errored
 - Per target: status, last built, what it did on the last run, branching pattern, runtime, size, errors, warnings, R command, functions called, and a local dependency graph centred on that target — the same fields the graph's inspect panel shows
@@ -315,6 +320,30 @@ The browser sends a plain text message to the `/chat` httpuv endpoint. ellmer pr
 | `ellmer::chat_google_gemini()` | Google Gemini |
 
 > **Local model caveat:** Description and explanation generation (`llm = TRUE`) are simple completions that work with any model. The analytics chat requires reliable tool calling, which smaller local models handle inconsistently. Cloud models (GPT-4o, Claude, Gemini) work well.
+
+---
+
+## On large pipelines
+
+Checked against a synthetic pipeline of **420 targets and 120 functions**.
+
+A flat sidebar does not survive that: it was 420 rows and 12,600px of scroll,
+of which a 900px viewport showed 7%. Now the default list is grouped and
+capped at 40 — **errored and outdated targets are never truncated**, because
+they are the reason you opened the page, while the healthy majority is
+summarised as *Showing 40 of 420 · show all*. Functions group by source file.
+Navigating to something the cap hides pins it at the top under **Current**, so
+the sidebar always shows where you are.
+
+Search reaches the rest. It spans targets and functions together, since you
+rarely know in advance whether what you want is a target or the function
+behind it, and it is weighted toward names so exact matches rank first.
+
+Two things that are *not* solved at that size. The pipeline graph draws all
+420 nodes, and on a deep pipeline the layered layout stretches into a single
+long line — usable with pan and zoom, but not a summary. And the viewer is a
+single self-contained file, 1.1 MB for this pipeline, which is fine to open
+but grows linearly with the number of pages.
 
 ---
 
