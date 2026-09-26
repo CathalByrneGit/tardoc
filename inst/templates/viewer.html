@@ -129,6 +129,16 @@ a{color:#6d28d9;text-decoration:none}a:hover{text-decoration:underline}
 .tnode.errored{border-color:#f38ba8}
 .tnode.outdated{border-color:#f9e2af}
 .tnode.unbuilt{border-style:dotted;opacity:.75}
+/* A collapsed group reads as a container, not a target. */
+.tnode.group{min-width:150px;border-width:2px;background:#232334}
+.tnode.group .nm{font-size:13px}
+.tnode.group .ct{font-size:11px;color:#9399b2;margin-top:2px}
+.tnode.group .warn{color:#f9e2af}
+.tnode.group .err{color:#f38ba8}
+#grp-crumb{font-size:12px;color:#6c7086;margin-left:4px}
+#grp-crumb b{color:#cba6f7}
+#grp-crumb button{background:none;border:none;color:#89b4fa;cursor:pointer;
+                  font-size:12px;padding:0 0 0 6px;text-decoration:underline}
 /* Critical path: dim everything else rather than recolour the path, so
    status colours stay readable while it is on. */
 #rf-graph.cp-on .react-flow__node:not(.cp) .tnode{opacity:.28}
@@ -220,6 +230,8 @@ a{color:#6d28d9;text-decoration:none}a:hover{text-decoration:underline}
       <p class="graph-hint">Click a node for details &middot; drag to pan &middot; scroll to zoom
         <label class="fn-toggle"><input type="checkbox" id="show-functions"> show functions</label>
         <label class="fn-toggle" id="cp-toggle-wrap" style="display:none"><input type="checkbox" id="show-critical"> critical path</label>
+        <label class="fn-toggle" id="grp-toggle-wrap" style="display:none"><input type="checkbox" id="show-groups"> group</label>
+        <span id="grp-crumb" style="display:none"></span>
       </p>
       <div id="rf-stage">
         <div id="rf-graph"></div>
@@ -555,14 +567,25 @@ function renderOverview(showFunctions) {
                markerEnd: { type: RFC.MarkerType.ArrowClosed, color: '#a6adc8' } };
     });
 
+  paintFlow(rfNodes, rfEdges, function (_ev, node) { rfOpen(node.id); },
+            'flat:' + (showFunctions ? 'fn' : 'nofn'));
+}
+
+// Shared by the flat, grouped and drilled-in views.
+//
+// `key` matters: React Flow only honours fitView on mount, so without a key
+// change switching views keeps the previous pan and zoom and the new graph
+// lands off screen.
+function paintFlow(rfNodes, rfEdges, onNodeClick, viewKey) {
   const RFlow = RFC.ReactFlow || RFC.default;
   if (!rfRoot) rfRoot = ReactDOM.createRoot(document.getElementById('rf-graph'));
   rfRoot.render(
     rce(RFlow, {
+      key: viewKey || 'flat',
       nodes: rfNodes, edges: rfEdges,
       fitView: true, fitViewOptions: { padding: 0.15 }, minZoom: 0.1,
       nodesDraggable: true,
-      onNodeClick: function (_ev, node) { rfOpen(node.id); },
+      onNodeClick: onNodeClick,
       onPaneClick: rfClose
     },
       rce(RFC.Background, { color: '#313244', gap: 16 }),
@@ -572,6 +595,91 @@ function renderOverview(showFunctions) {
         nodeColor: function () { return '#45475a'; } })
     )
   );
+}
+
+// ---- grouped overview ----------------------------------------------------
+//
+// At 400 targets the layered graph is a line nobody can read. The groups come
+// from target_groups() in R, which tries the declaring file, then the file
+// defining the functions a target calls, then a name prefix, then depth
+// bands, and rejects the lot when none scores well -- so this toggle only
+// appears when there is a grouping worth offering. It stays off by default:
+// the flat graph is still what most pipelines want.
+//
+// Drilling into a group re-uses a layout computed in R rather than running a
+// layout in the browser, so there is one implementation of it, not two.
+
+let groupDrill = null;
+
+function groupNodeEl(g) {
+  const kids = [rce('div', { className: 'nm' }, g.label),
+                rce('div', { className: 'ct' },
+                    g.n_targets + (g.n_targets === 1 ? ' target' : ' targets'))];
+  if (g.n_errored)  kids.push(rce('div', { className: 'ct err' }, g.n_errored + ' errored'));
+  else if (g.n_outdated) kids.push(rce('div', { className: 'ct warn' }, g.n_outdated + ' outdated'));
+  return rce.apply(null, ['div', { className: 'tnode group ' + g.status }].concat(kids));
+}
+
+function renderGrouped() {
+  const G = GRAPH.groups;
+  const rfNodes = G.nodes.map(function (g) {
+    return {
+      id: g.id, position: { x: g.x, y: g.y },
+      data: { label: groupNodeEl(g) },
+      sourcePosition: RFC.Position.Right, targetPosition: RFC.Position.Left,
+      style: { background: 'transparent', border: 'none', padding: 0, width: 'auto' }
+    };
+  });
+  const rfEdges = G.edges.map(function (d) {
+    return { id: d.id, source: d.source, target: d.target,
+             style: { stroke: '#a6adc8', strokeWidth: 2 },
+             markerEnd: { type: RFC.MarkerType.ArrowClosed, color: '#a6adc8' } };
+  });
+  paintFlow(rfNodes, rfEdges, function (_ev, node) { drillInto(node.id); },
+            'groups');
+  crumb(null);
+}
+
+function drillInto(label) {
+  const G = GRAPH.groups;
+  const place = {};
+  (G.layout[label] || []).forEach(function (p) { place[p.id] = p; });
+  const members = GRAPH.nodes.filter(n => place[n.id]);
+  if (!members.length) return;
+  groupDrill = label;
+
+  const rfNodes = members.map(function (n) {
+    return {
+      id: n.id, position: { x: place[n.id].x, y: place[n.id].y },
+      className: n.on_critical_path ? 'cp' : '',
+      data: { label: rce.apply(null, ['div',
+        { className: 'tnode ' + n.status + ' ' + (n.kind || 'stem') },
+        rce('div', { className: 'nm' }, n.label),
+        rce('div', { className: 'st' }, n.status_label || n.status)]) },
+      sourcePosition: RFC.Position.Right, targetPosition: RFC.Position.Left,
+      style: { background: 'transparent', border: 'none', padding: 0, width: 'auto' }
+    };
+  });
+  const ids = {}; members.forEach(n => { ids[n.id] = 1; });
+  const rfEdges = (GRAPH.edges || [])
+    .filter(d => ids[d.source] && ids[d.target])
+    .map(function (d) {
+      return { id: d.id, source: d.source, target: d.target,
+               style: { stroke: '#a6adc8', strokeWidth: 1.5 },
+               markerEnd: { type: RFC.MarkerType.ArrowClosed, color: '#a6adc8' } };
+    });
+  paintFlow(rfNodes, rfEdges, function (_ev, node) { rfOpen(node.id); },
+            'drill:' + label);
+  crumb(label, members.length);
+}
+
+function crumb(label, n) {
+  const el = document.getElementById('grp-crumb');
+  if (!label) { el.style.display = 'none'; el.innerHTML = ''; groupDrill = null; return; }
+  el.style.display = '';
+  el.innerHTML = '<b>' + rfEsc(label) + '</b> &middot; ' + n + ' targets' +
+                 '<button id="grp-back">back to groups</button>';
+  document.getElementById('grp-back').onclick = function () { rfClose(); renderGrouped(); };
 }
 
 if (GRAPH.nodes && GRAPH.nodes.length) {
@@ -593,6 +701,21 @@ if (GRAPH.nodes && GRAPH.nodes.length) {
   cpBox.addEventListener('change', function () {
     document.getElementById('rf-graph').classList.toggle('cp-on', cpBox.checked);
   });
+
+  // Only offered when R found a grouping worth offering.
+  if (GRAPH.groups && GRAPH.groups.nodes && GRAPH.groups.nodes.length > 1) {
+    const wrap = document.getElementById('grp-toggle-wrap');
+    wrap.style.display = '';
+    wrap.title = 'Grouped by ' + (GRAPH.grouping_method || 'structure');
+    const grpBox = document.getElementById('show-groups');
+    grpBox.addEventListener('change', function () {
+      rfClose();
+      // Functions have no group, so the two toggles are mutually exclusive.
+      fnBox.disabled = grpBox.checked;
+      if (grpBox.checked) renderGrouped();
+      else { crumb(null); renderOverview(fnBox.checked); }
+    });
+  }
 
   renderProfile();
   renderHistory();

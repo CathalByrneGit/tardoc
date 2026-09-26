@@ -4,7 +4,7 @@
 \alias{build_dag_graph}
 \title{Build the node and edge lists a React Flow graph needs}
 \usage{
-build_dag_graph(targets_data, include_functions = TRUE)
+build_dag_graph(targets_data, include_functions = TRUE, groups = NULL)
 }
 \arguments{
 \item{targets_data}{Output of \code{\link[=load_targets_data]{load_targets_data()}}.}
@@ -12,9 +12,15 @@ build_dag_graph(targets_data, include_functions = TRUE)
 \item{include_functions}{Logical. Include function vertices as nodes.
 \code{tar_network()} reports the functions a target calls, and the viewer can
 toggle them.}
+
+\item{groups}{Optional named character vector of group label per target,
+from \code{\link[=target_groups]{target_groups()}}. When supplied each node carries its \code{group}, and
+the result gains a \code{groups} element: a collapsed graph of one node per
+group, plus a per-group layout so the viewer can drill into one without
+laying anything out itself.}
 }
 \value{
-A list with \code{nodes} and \code{edges}.
+A list with \code{nodes} and \code{edges}, and \code{groups} when grouped.
 }
 \description{
 Turns \code{targets_data} into the \verb{\{nodes, edges\}} shape the viewer's graph

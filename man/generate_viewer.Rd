@@ -4,7 +4,13 @@
 \alias{generate_viewer}
 \title{Generate a self-contained HTML viewer}
 \usage{
-generate_viewer(targets_data, function_names, cfg, pkg_name = "targets docs")
+generate_viewer(
+  targets_data,
+  function_names,
+  cfg,
+  pkg_name = "targets docs",
+  group_by = "auto"
+)
 }
 \arguments{
 \item{targets_data}{Output of \code{\link[=load_targets_data]{load_targets_data()}}.}
@@ -14,6 +20,10 @@ generate_viewer(targets_data, function_names, cfg, pkg_name = "targets docs")
 \item{cfg}{A site config list.}
 
 \item{pkg_name}{Character. Site title shown in the viewer header.}
+
+\item{group_by}{Passed to \code{\link[=target_groups]{target_groups()}}. When a grouping is
+found the overview offers a \strong{group} toggle; the flat graph remains the
+default view.}
 }
 \value{
 Path to \code{viewer.html} invisibly.

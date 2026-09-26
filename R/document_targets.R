@@ -25,6 +25,11 @@
 #' @param llm_api_key   API key. `NULL` reads the env var.
 #' @param llm_base_url  Base URL for `"openai_compatible"` provider (e.g. a
 #'   llama.cpp server: `"http://localhost:8080/v1"`).
+#' @param group_by How the pipeline overview may be collapsed into groups:
+#'   `"auto"` picks a grouping signal and rejects the lot when none scores
+#'   well, `"none"` disables it, or name one of `"declaration"`, `"functions"`,
+#'   `"prefix"`, `"depth"` to force it. See [target_groups()]. Grouping only
+#'   adds an option in the viewer -- the flat graph stays the default view.
 #' @param check_outdated Logical. Call [targets::tar_outdated()] so pages and
 #'   the graph can tell a stale target from a current one. It re-hashes
 #'   dependencies, so pass `FALSE` on a large pipeline to skip it; status then
@@ -62,7 +67,8 @@ document_targets <- function(project_path  = ".",
                               llm_model     = NULL,
                               llm_api_key   = NULL,
                               llm_base_url  = NULL,
-                              check_outdated = TRUE) {
+                              check_outdated = TRUE,
+                              group_by      = "auto") {
 
   cfg <- build_site_config(project_path, site_dir, repo_url)
   setup_site_dirs(cfg)
@@ -95,7 +101,8 @@ document_targets <- function(project_path  = ".",
   }
 
   # Tier 1: self-contained viewer
-  generate_viewer(targets_data, function_names, cfg, pkg_name)
+  generate_viewer(targets_data, function_names, cfg, pkg_name,
+                  group_by = group_by)
 
   # Generate analytics data (used by both WASM and server analytics)
   analytics_data <- .build_analytics_data(targets_data, function_names, cfg)

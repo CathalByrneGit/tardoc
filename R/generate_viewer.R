@@ -10,11 +10,15 @@
 #' @param function_names Character vector of function names.
 #' @param cfg            A site config list.
 #' @param pkg_name       Character. Site title shown in the viewer header.
+#' @param group_by       Passed to [target_groups()]. When a grouping is
+#'   found the overview offers a **group** toggle; the flat graph remains the
+#'   default view.
 #'
 #' @return Path to `viewer.html` invisibly.
 #' @export
 generate_viewer <- function(targets_data, function_names, cfg,
-                            pkg_name = "targets docs") {
+                            pkg_name = "targets docs",
+                            group_by = "auto") {
   tpl <- .load_template("viewer.html")
 
   target_pages <- lapply(targets_data$target_names, function(name) {
@@ -53,7 +57,14 @@ generate_viewer <- function(targets_data, function_names, cfg,
 
   # Pipeline overview graph. Positions are computed here because React Flow
   # does no layout of its own.
-  graph <- build_dag_graph(targets_data)
+  grouping <- target_groups(targets_data, cfg, method = group_by)
+  if (length(grouping$groups)) {
+    message("Grouping: ", grouping$method, " (",
+            length(unique(grouping$groups)), " groups, score ",
+            round(grouping$score, 2), ")")
+  }
+  graph   <- build_dag_graph(targets_data, groups = grouping$groups)
+  graph$grouping_method <- grouping$method
   profile <- pipeline_profile(targets_data)
 
   # Mark the critical path on the nodes so the graph can highlight it without

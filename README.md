@@ -339,11 +339,49 @@ Search reaches the rest. It spans targets and functions together, since you
 rarely know in advance whether what you want is a target or the function
 behind it, and it is weighted toward names so exact matches rank first.
 
-Two things that are *not* solved at that size. The pipeline graph draws all
-420 nodes, and on a deep pipeline the layered layout stretches into a single
-long line — usable with pan and zoom, but not a summary. And the viewer is a
-single self-contained file, 1.1 MB for this pipeline, which is fine to open
-but grows linearly with the number of pages.
+### Grouping the graph
+
+420 nodes in a layered layout is a line nobody can read. When tardoc can find
+a grouping worth offering, the overview gets a **group** toggle that collapses
+it to one node per group; clicking a group drills into it, and *back to
+groups* returns. The flat graph stays the default — grouping is an option, not
+a rewrite of the view.
+
+![The 420-target pipeline collapsed to six group nodes, each labelled with its file and target count](man/figures/viewer-grouped.png)
+
+The groups are found rather than configured. [`target_groups()`](#target_groupstargets_data-cfg-method) tries four
+signals in descending order of authority and takes the first that clears a
+quality bar:
+
+| Signal | What it uses |
+|---|---|
+| `declaration` | The file each target is declared in — parsed from `_targets.R` and everything it sources. A project split into `targets/ingest.R`, `targets/model.R` has already declared its grouping |
+| `functions` | The source file of the functions a target calls |
+| `prefix` | A shared name prefix: `ingest_01`, `ingest_02` → `ingest` |
+| `depth` | Bands of dependency depth. A last resort |
+
+A grouping only counts if it has 2–20 groups, averages at least three members
+each, and has no group holding more than 70% of the pipeline — so a bad
+grouping is rejected rather than shown. Below 15 targets `auto` does not group
+at all: seven targets read fine as a list.
+
+**Authority beats arithmetic.** On a long chain, depth bands score *better*
+than a name prefix — six tidy bands against three uneven groups — but they are
+the worse reading of the pipeline. Taking the first signal past the bar rather
+than the highest-scoring one is what keeps the precedence meaningful. There is
+a test pinning exactly that.
+
+Force or disable it with `document_targets(group_by = "declaration")`,
+`"prefix"`, `"none"` and so on. A named method is honoured even when it falls
+short of the bar; only `"auto"` is fussy.
+
+### Still open
+
+The viewer is a single self-contained file — 1.1 MB for this pipeline — and it
+grows with the number of pages. Roughly a third of that is the graph payload,
+much of which duplicates the search index, so slimming it is the next move;
+splitting pages into separately fetched files would scale further but costs
+`file://` support, which is worth more.
 
 ---
 

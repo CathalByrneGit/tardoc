@@ -108,9 +108,15 @@ dag_layout <- function(nodes, edges, x_spacing = 220, y_spacing = 90) {
 #' @param include_functions Logical. Include function vertices as nodes.
 #'   `tar_network()` reports the functions a target calls, and the viewer can
 #'   toggle them.
-#' @return A list with `nodes` and `edges`.
+#' @param groups Optional named character vector of group label per target,
+#'   from [target_groups()]. When supplied each node carries its `group`, and
+#'   the result gains a `groups` element: a collapsed graph of one node per
+#'   group, plus a per-group layout so the viewer can drill into one without
+#'   laying anything out itself.
+#' @return A list with `nodes` and `edges`, and `groups` when grouped.
 #' @export
-build_dag_graph <- function(targets_data, include_functions = TRUE) {
+build_dag_graph <- function(targets_data, include_functions = TRUE,
+                            groups = NULL) {
   verts <- as.data.frame(targets_data$network$vertices, stringsAsFactors = FALSE)
   if (is.null(verts$type)) verts$type <- "stem"
   if (!include_functions) verts <- verts[verts$type != "function", , drop = FALSE]
@@ -135,7 +141,92 @@ build_dag_graph <- function(targets_data, include_functions = TRUE) {
          source = edges$from[i], target = edges$to[i])
   })
 
-  list(nodes = nodes, edges = edge_list)
+  if (length(groups)) {
+    nodes <- lapply(nodes, function(n) {
+      n$group <- if (!is.na(groups[n$id])) unname(groups[n$id]) else ""
+      n
+    })
+  }
+
+  out <- list(nodes = nodes, edges = edge_list)
+  if (length(groups)) out$groups <- .collapse_graph(nodes, edges, groups)
+  out
+}
+
+#' Collapse a graph to one node per group
+#'
+#' At 400 targets the layered layout is a line nobody can read. Collapsing to
+#' a handful of group nodes makes the shape legible, and a per-group layout is
+#' emitted alongside so clicking into one is a drill-down the viewer can
+#' render directly -- no layout algorithm duplicated in JavaScript.
+#'
+#' @param nodes The node list from [build_dag_graph()].
+#' @param edges The edge data frame.
+#' @param groups Named character vector of group label per target.
+#'
+#' @return A list with `nodes` (one per group, carrying counts and a status
+#'   rollup), `edges` (deduplicated between groups), and `layout` (per group,
+#'   the positions of its members laid out on their own).
+#' @keywords internal
+.collapse_graph <- function(nodes, edges, groups) {
+  gof <- function(id) if (!is.na(groups[id])) unname(groups[id]) else ""
+  ids <- vapply(nodes, function(n) n$id, character(1))
+  gs  <- vapply(ids, gof, character(1))
+  keep <- nzchar(gs)
+  if (!any(keep)) return(NULL)
+
+  labels <- unique(gs[keep])
+
+  # Edges between distinct groups, deduplicated. Within-group edges disappear
+  # into the node, which is the point of collapsing.
+  e_from <- gs[match(edges$from, ids)]
+  e_to   <- gs[match(edges$to,   ids)]
+  ok <- !is.na(e_from) & !is.na(e_to) & nzchar(e_from) & nzchar(e_to) &
+        e_from != e_to
+  pairs <- unique(data.frame(from = e_from[ok], to = e_to[ok],
+                             stringsAsFactors = FALSE))
+
+  pos <- dag_layout(labels, pairs, x_spacing = 260, y_spacing = 110)
+
+  gnodes <- lapply(seq_len(nrow(pos)), function(i) {
+    lab <- pos$name[i]
+    mem <- nodes[gs == lab]
+    st  <- vapply(mem, function(n) n$status %||% "", character(1))
+    # The worst status in the group is what a collapsed node must show:
+    # a group of 70 with one failure is not a healthy group.
+    roll <- if (any(st == "errored")) "errored"
+            else if (any(st == "outdated")) "outdated"
+            else if (any(st == "unbuilt")) "unbuilt" else "uptodate"
+    secs <- vapply(mem, function(n) {
+      v <- n$seconds; if (is.null(v) || is.na(v)) 0 else as.numeric(v)
+    }, numeric(1))
+    list(id = lab, label = lab, kind = "group", status = roll,
+         status_label = .status_label(roll),
+         n_targets = length(mem),
+         n_errored = sum(st == "errored"),
+         n_outdated = sum(st == "outdated"),
+         seconds = sum(secs),
+         members = as.list(vapply(mem, function(n) n$id, character(1))),
+         x = pos$x[i], y = pos$y[i], layer = pos$layer[i])
+  })
+
+  gedges <- lapply(seq_len(nrow(pairs)), function(i) {
+    list(id = paste0(pairs$from[i], "=>", pairs$to[i]),
+         source = pairs$from[i], target = pairs$to[i])
+  })
+
+  # Each group laid out on its own, so drilling in does not require the
+  # browser to run a layout.
+  layout <- lapply(labels, function(lab) {
+    mem <- ids[gs == lab]
+    sub <- edges[edges$from %in% mem & edges$to %in% mem, , drop = FALSE]
+    lp  <- dag_layout(mem, sub)
+    lapply(seq_len(nrow(lp)), function(i)
+      list(id = lp$name[i], x = lp$x[i], y = lp$y[i]))
+  })
+  names(layout) <- labels
+
+  list(nodes = gnodes, edges = gedges, layout = layout)
 }
 
 #' Build one graph node
