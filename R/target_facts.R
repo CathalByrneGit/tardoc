@@ -31,12 +31,23 @@
 #' @keywords internal
 .target_status <- function(name, meta, outdated = NULL, has_store = TRUE) {
   row <- meta[meta$name == name, , drop = FALSE]
-  built <- has_store && nrow(row) > 0 &&
-    !(("time" %in% names(row)) && is.na(row$time[1]))
 
-  if (nrow(row) > 0 && "error" %in% names(row) && !is.na(row$error[1])) {
-    return("errored")
+  # A pattern target's own row carries no `time` -- only its branches do -- so
+  # a branched target that has run looks unbuilt unless its branches are
+  # counted. Its errors live on the branch rows too: the parent stays NA while
+  # a branch fails, and a target with a failed branch has not succeeded.
+  kids <- if ("parent" %in% names(meta)) {
+    meta[!is.na(meta$parent) & meta$parent == name, , drop = FALSE]
+  } else {
+    meta[0, , drop = FALSE]
   }
+
+  own_error <- nrow(row) > 0 && "error" %in% names(row) && !is.na(row$error[1])
+  kid_error <- nrow(kids) > 0 && "error" %in% names(kids) && any(!is.na(kids$error))
+  if (own_error || kid_error) return("errored")
+
+  has_time <- nrow(row) > 0 && "time" %in% names(row) && !is.na(row$time[1])
+  built    <- has_store && (has_time || nrow(kids) > 0)
   if (!built) return("unbuilt")
   if (!is.null(outdated) && name %in% outdated) return("outdated")
   "uptodate"

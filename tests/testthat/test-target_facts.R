@@ -135,3 +135,31 @@ test_that("the graph node and the target page agree on a target", {
     expect_identical(node[[k]], facts[[k]], info = k)
   }
 })
+
+test_that("a branched target is built when its branches are", {
+  # A pattern row carries no `time` -- only the branch rows do -- so counting
+  # only the parent made every branched target read "Not built".
+  meta <- dplyr::tibble(
+    name   = c("p", "p_01", "p_02"),
+    type   = c("pattern", "branch", "branch"),
+    parent = c(NA_character_, "p", "p"),
+    time   = c(NA_character_, "2026-01-01", "2026-01-01"),
+    error  = NA_character_, warnings = NA_character_,
+    seconds = c(2, 1, 1), bytes = c(20, 10, 10)
+  )
+  expect_equal(tardoc:::.target_status("p", meta, NULL, TRUE), "uptodate")
+})
+
+test_that("a failed branch makes its parent errored", {
+  # The parent's own error stays NA while a branch fails; a target with a
+  # failed branch has not succeeded.
+  meta <- dplyr::tibble(
+    name   = c("p", "p_01", "p_02"),
+    type   = c("pattern", "branch", "branch"),
+    parent = c(NA_character_, "p", "p"),
+    time   = c(NA_character_, "2026-01-01", "2026-01-01"),
+    error  = c(NA_character_, NA_character_, "boom"),
+    warnings = NA_character_, seconds = c(2, 1, 1), bytes = c(20, 10, 10)
+  )
+  expect_equal(tardoc:::.target_status("p", meta, NULL, TRUE), "errored")
+})

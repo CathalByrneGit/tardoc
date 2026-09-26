@@ -71,6 +71,10 @@ document_targets <- function(project_path  = ".",
   target_names   <- generate_all_target_pages(targets_data, cfg)
   function_names <- generate_all_function_pages(cfg)
 
+  # Before the viewer, so this run's figures are in the history the viewer
+  # embeds -- the diff shown is then between this build and the one before.
+  record_run_snapshot(targets_data, cfg)
+
   generate_notes(target_names, function_names, cfg)
   generate_search_index(targets_data, function_names, cfg)
   generate_llms_txt(targets_data, cfg,

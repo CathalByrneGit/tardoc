@@ -53,6 +53,7 @@ my_project/
     ├── analytics.html           tier 3 shell, needs view_tardoc_db()
     ├── search_index.json
     ├── tardoc_analytics.json
+    ├── history.json             one snapshot per build, for the run diff
     ├── targets/
     │   └── clean_data.md        one .md per target
     ├── functions/
@@ -78,7 +79,14 @@ my_project/
 
 - Per function: rendered roxygen docs, full source code
 - Notes panel — content from `notes/` files appears at the bottom of each page
+- **Where the time goes** — slowest and largest targets, and the **critical path**: the longest dependency chain, whose total is the floor on a full rebuild however many workers you give it. Toggle it on the graph to see which chain to optimise
+- **Since the last build** — what rebuilt, what changed status, what got meaningfully slower or larger. A snapshot per build is appended to `tardoc/history.json`
+- **Per-branch detail** — a dynamic target lists each branch with its own runtime, size and error. Failed branches are always listed, however many branches there are
 - Deep links — `viewer.html#targets:clean` opens that page directly, and selecting a page updates the hash
+
+![The critical path highlighted on the graph, with the run diff and the slowest and largest targets below](man/figures/viewer-profile.png)
+
+<sub>**critical path** dims everything off the longest dependency chain. Below it, the run diff names what rebuilt since the previous build, and the rankings show where the time and space go — every bar is a link to that target's page.</sub>
 
 **What a target page looks like:**
 
@@ -409,6 +417,19 @@ The graph data and layout used by the viewer. `build_dag_graph()` returns the
 `{nodes, edges}` list React Flow consumes; `dag_layout()` assigns each node a
 column by longest-path depth. Exported so you can build a graph of your own.
 
+### `pipeline_profile(targets_data, top = 10)` / `critical_path(nodes, edges)`
+
+Where a run spends its time and space. `pipeline_profile()` returns totals,
+the slowest and largest targets, and the critical path; `critical_path()` is
+the underlying longest-weight walk and is useful on its own.
+
+### `record_run_snapshot(targets_data, cfg)` / `read_run_history(cfg)` / `diff_run_history(history)`
+
+The run history behind **Since the last build**. `record_run_snapshot()` is
+called for you during `document_targets()` and appends to
+`tardoc/history.json` only when something differs from the previous build.
+`diff_run_history()` compares the two most recent snapshots.
+
 ### `get_fn_docs(fn_name, file)`
 
 Returns roxygen documentation for a single function as a markdown string.
@@ -443,6 +464,8 @@ No. `tar_manifest()` and `tar_network()` only require `_targets.R`. The full doc
 If a store is present, build status and timestamps appear on target pages. Without one every target reads `Not built`, which is accurate rather than a gap.
 
 `tar_outdated()` re-hashes files and dependencies, so on a large pipeline it costs a few seconds. Pass `document_targets(check_outdated = FALSE)` to skip it; status then falls back to reporting errors only.
+
+A dynamically branched target is a special case worth knowing about: its own metadata row carries no build time — only its branches do — and its errors live on the branch rows too. tardoc reads the branches, so a branched target that has run reports `Up-to-date`, and one with a failed branch reports `Errored` rather than hiding it.
 
 ---
 

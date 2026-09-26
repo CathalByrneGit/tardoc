@@ -129,6 +129,22 @@ a{color:#6d28d9;text-decoration:none}a:hover{text-decoration:underline}
 .tnode.errored{border-color:#f38ba8}
 .tnode.outdated{border-color:#f9e2af}
 .tnode.unbuilt{border-style:dotted;opacity:.75}
+/* Critical path: dim everything else rather than recolour the path, so
+   status colours stay readable while it is on. */
+#rf-graph.cp-on .react-flow__node:not(.cp) .tnode{opacity:.28}
+#rf-graph.cp-on .react-flow__node.cp .tnode{border-color:#cba6f7;box-shadow:0 0 0 1px #cba6f7}
+.profile-cols{display:grid;gap:20px;grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
+.profile-cols h3{font-size:13px;margin:16px 0 8px}
+.bar-row{display:grid;grid-template-columns:1fr 60px;gap:8px;align-items:center;
+         font-size:12px;margin-bottom:5px}
+.bar-row .bar-name{position:relative;padding:3px 6px;border-radius:4px;overflow:hidden;
+                   white-space:nowrap;text-overflow:ellipsis;cursor:pointer}
+.bar-row .bar-fill{position:absolute;inset:0;background:#ede9fe;border-radius:4px;z-index:0}
+.bar-row .bar-name span{position:relative;z-index:1}
+.bar-row .bar-val{text-align:right;color:#6b7280;font-variant-numeric:tabular-nums}
+#since-body ul{margin:6px 0 14px;padding-left:20px;font-size:13px;line-height:1.7}
+#since-body h3{font-size:13px;margin:14px 0 4px}
+#since-body code{font-size:12px}
 .tnode .nm{font-weight:600}
 .tnode .st{font-size:10.5px;color:#6c7086;margin-top:2px}
 .tnode.uptodate .st{color:#a6e3a1}
@@ -191,11 +207,27 @@ a{color:#6d28d9;text-decoration:none}a:hover{text-decoration:underline}
       <h2>Pipeline overview</h2>
       <p class="graph-hint">Click a node for details &middot; drag to pan &middot; scroll to zoom
         <label class="fn-toggle"><input type="checkbox" id="show-functions"> show functions</label>
+        <label class="fn-toggle" id="cp-toggle-wrap" style="display:none"><input type="checkbox" id="show-critical"> critical path</label>
       </p>
       <div id="rf-stage">
         <div id="rf-graph"></div>
         <aside id="rf-panel" hidden aria-label="Target details"></aside>
       </div>
+
+      <section id="since-last" style="display:none">
+        <h2>Since the last build</h2>
+        <p class="graph-hint" id="since-when"></p>
+        <div id="since-body"></div>
+      </section>
+
+      <section id="profile" style="display:none">
+        <h2>Where the time goes</h2>
+        <p class="graph-hint" id="profile-summary"></p>
+        <div class="profile-cols">
+          <div><h3>Slowest targets</h3><div id="profile-slowest"></div></div>
+          <div><h3>Largest targets</h3><div id="profile-largest"></div></div>
+        </div>
+      </section>
     </div>
     <div id="page-content" style="display:none"></div>
   </div>
@@ -206,6 +238,8 @@ const PAGES    = {{PAGES_JSON}};
 const INDEX    = {{INDEX_JSON}};
 const PKG_NAME = {{PKG_NAME_JSON}};
 const GRAPH    = {{GRAPH_JSON}};
+const PROFILE  = {{PROFILE_JSON}};
+const HISTORY  = {{HISTORY_JSON}};
 
 const PAGE_MAP = {};
 PAGES.forEach(p => { PAGE_MAP[p.type + ':' + p.name] = p; });
@@ -225,6 +259,92 @@ const nOutdated = targets.filter(t => t.status === 'outdated').length;
 if (nOutdated > 0) {
   document.getElementById('stat-outdated').textContent = nOutdated;
   document.getElementById('stat-outdated-card').style.display = '';
+}
+
+// ---- where the time goes -------------------------------------------------
+// seconds and bytes have always been in tar_meta(); nothing used them beyond
+// printing one target's figure on its own page.
+
+function fmtSecsTop(s) {
+  if (s == null || isNaN(s)) return '';
+  if (s < 1)  return Math.round(s * 1000) + ' ms';
+  if (s < 60) return (+s.toPrecision(3)) + ' s';
+  return Math.floor(s / 60) + 'm ' + Math.round(s % 60) + 's';
+}
+function fmtBytesTop(b) {
+  if (b == null || isNaN(b)) return '';
+  const u = ['B', 'kB', 'MB', 'GB', 'TB'];
+  const i = b <= 0 ? 0 : Math.min(u.length - 1, Math.floor(Math.log(b) / Math.log(1000)));
+  return (+(b / Math.pow(1000, i)).toPrecision(3)) + ' ' + u[i];
+}
+
+// Bars are relative to the largest in their own column, so the shape of the
+// distribution is visible rather than every row looking the same.
+function barList(rows, field, fmt) {
+  if (!rows || !rows.length) return '<p class="graph-hint">nothing recorded</p>';
+  const max = Math.max.apply(null, rows.map(r => r[field]));
+  return rows.map(function (r) {
+    const pct = max > 0 ? (r[field] / max) * 100 : 0;
+    return '<div class="bar-row">' +
+      '<div class="bar-name" data-goto-target="' + rfEsc(r.name) + '">' +
+        '<div class="bar-fill" style="width:' + pct.toFixed(1) + '%"></div>' +
+        '<span>' + rfEsc(r.name) + '</span>' +
+      '</div>' +
+      '<div class="bar-val">' + fmt(r[field]) + '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function renderProfile() {
+  if (!PROFILE) return;
+  const slow = PROFILE.slowest || [], big = PROFILE.largest || [];
+  if (!slow.length && !big.length) return;
+
+  const cp = PROFILE.critical_path || [];
+  const parts = [];
+  if (PROFILE.total_seconds) {
+    parts.push('<b>' + fmtSecsTop(PROFILE.total_seconds) + '</b> of recorded build time');
+  }
+  if (cp.length) {
+    // The number that matters for optimising: no amount of parallelism beats
+    // the longest dependency chain.
+    parts.push('longest chain <b>' + fmtSecsTop(PROFILE.critical_seconds) +
+               '</b> over ' + cp.length + ' targets');
+  }
+  if (PROFILE.total_bytes) parts.push('<b>' + fmtBytesTop(PROFILE.total_bytes) + '</b> stored');
+  document.getElementById('profile-summary').innerHTML = parts.join(' &middot; ');
+  document.getElementById('profile-slowest').innerHTML = barList(slow, 'seconds', fmtSecsTop);
+  document.getElementById('profile-largest').innerHTML = barList(big, 'bytes', fmtBytesTop);
+  document.getElementById('profile').style.display = '';
+  if (cp.length > 1) document.getElementById('cp-toggle-wrap').style.display = '';
+}
+
+// ---- since the last build ------------------------------------------------
+// Every docs build used to overwrite the previous figures, so "what actually
+// rebuilt?" had no answer. history.json keeps a snapshot per build.
+
+function renderHistory() {
+  const d = HISTORY && HISTORY.diff;
+  if (!d) return;
+  const groups = [
+    ['Rebuilt',        d.rebuilt,        null],
+    ['Status changed', d.status_changed, null],
+    ['Added',          d.added,          null],
+    ['Removed',        d.removed,        null],
+    ['Slower',         d.slower,         null],
+    ['Faster',         d.faster,         null],
+    ['Grew',           d.grew,           null],
+    ['Shrank',         d.shrank,         null]
+  ].filter(g => g[1] && g[1].length);
+
+  if (!groups.length) return;
+  document.getElementById('since-when').textContent =
+    'Comparing ' + d.to + ' with ' + d.from + '.';
+  document.getElementById('since-body').innerHTML = groups.map(function (g) {
+    return '<h3>' + g[0] + '</h3><ul>' +
+      g[1].map(x => '<li><code>' + rfEsc(x) + '</code></li>').join('') + '</ul>';
+  }).join('');
+  document.getElementById('since-last').style.display = '';
 }
 
 // ---- pipeline overview: React Flow ---------------------------------------
@@ -407,6 +527,7 @@ function renderOverview(showFunctions) {
     return {
       id: n.id,
       position: { x: n.x, y: n.y },
+      className: n.on_critical_path ? 'cp' : '',
       data: { label: rce.apply(null,
         ['div', { className: 'tnode ' + n.status + ' ' + (n.kind || 'stem') }].concat(kids)) },
       sourcePosition: RFC.Position.Right,
@@ -453,6 +574,24 @@ if (GRAPH.nodes && GRAPH.nodes.length) {
       renderOverview(fnBox.checked);
     });
   }
+
+  // Highlighting is a class on the container: toggling it does not re-render
+  // the graph, so pan and zoom survive.
+  const cpBox = document.getElementById('show-critical');
+  cpBox.addEventListener('change', function () {
+    document.getElementById('rf-graph').classList.toggle('cp-on', cpBox.checked);
+  });
+
+  renderProfile();
+  renderHistory();
+
+  // A bar in the profile is a link to the target it names.
+  document.addEventListener('click', function (ev) {
+    const el = ev.target.closest && ev.target.closest('[data-goto-target]');
+    if (!el) return;
+    showTab('targets');
+    loadPage('targets', el.getAttribute('data-goto-target'));
+  });
 } else {
   document.getElementById('rf-stage').innerHTML =
     '<p style="color:#6c7086;font-style:italic;padding:20px">No targets to graph.</p>';
