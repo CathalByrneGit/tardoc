@@ -82,7 +82,7 @@ my_project/
 
 <sub>Staleness propagates. Editing one function marked `clean` and everything downstream of it outdated, while `raw_path` and `readings` stayed current — the distinction an error-only status cannot draw.</sub>
 
-- Per function: rendered roxygen docs, full source code
+- Per function: rendered roxygen docs, and the **verbatim source** — comments, blank lines and the author's own formatting intact. The source is read from the file by srcref rather than reconstructed with `deparse()`, which discards every comment inside a function
 - Notes panel — content from `notes/` files appears at the bottom of each page
 - **Where the time goes** — slowest and largest targets, and the **critical path**: the longest dependency chain, whose total is the floor on a full rebuild however many workers you give it. Toggle it on the graph to see which chain to optimise
 - **Since the last build** — what rebuilt, what changed status, what got meaningfully slower or larger. A snapshot per build is appended to `tardoc/history.json`

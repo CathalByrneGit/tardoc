@@ -21,7 +21,13 @@ read_readings <- function(path) {
 #' @return A cleaned data frame with snake_case names.
 #' @export
 clean_readings <- function(readings, min_c = -40, max_c = 85) {
+  # The logger writes "Temp (C)" and "Station ID"; downstream code expects
+  # snake_case, so normalise before anything else touches the frame.
   names(readings) <- tolower(gsub("[^A-Za-z0-9]+", "_", names(readings)))
+
+  # Out-of-range values mean a probe was being serviced, not that the station
+  # was that cold. Dropping is deliberate: imputing would invent readings and
+  # the station counts downstream are reported as observed.
   readings[readings$temp_c >= min_c & readings$temp_c <= max_c, ]
 }
 
