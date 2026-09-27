@@ -83,6 +83,7 @@ my_project/
 <sub>Staleness propagates. Editing one function marked `clean` and everything downstream of it outdated, while `raw_path` and `readings` stayed current — the distinction an error-only status cannot draw.</sub>
 
 - Per function: rendered roxygen docs, and the **verbatim source** — comments, blank lines and the author's own formatting intact. The source is read from the file by srcref rather than reconstructed with `deparse()`, which discards every comment inside a function
+- Code blocks over 40 lines are clamped with a *Show all N lines* control, and every block has an **Expand** pop-out for a full-screen read. Short blocks — the median function in real R code is about a dozen lines — are left exactly as they are, because capping those would add a scrollbar to something that already fits
 - Notes panel — content from `notes/` files appears at the bottom of each page
 - **Where the time goes** — slowest and largest targets, and the **critical path**: the longest dependency chain, whose total is the floor on a full rebuild however many workers you give it. Toggle it on the graph to see which chain to optimise
 - **Since the last build** — what rebuilt, what changed status, what got meaningfully slower or larger. A snapshot per build is appended to `tardoc/history.json`
@@ -106,6 +107,10 @@ Build status and last-built timestamp come from the `_targets` store; the local 
 The panel shows the target's description and command, its branching `pattern` when it is a dynamic target, any error or warnings, build details (format, repository, iteration, last built, runtime, size), and its neighbours as clickable chips. **Open full page →** navigates the viewer to that target.
 
 The graph is rendered with [React Flow](https://reactflow.dev), not mermaid — see [`docs/visualisation-prototypes.md`](docs/visualisation-prototypes.md) for why, what a node exposes, and where the branching fields come from. The generated `.md` files still carry a `mermaid` fence so they render on GitHub and anywhere else markdown is read; the viewer replaces it with a live graph built from the same data.
+
+![A long function clamped, with a fade, a Show all 113 lines bar and an Expand button in the corner](man/figures/viewer-code-clamp.png)
+
+<sub>A 113-line function: clamped from 2.6 screens to 1.5, with the full text one click away and a pop-out for reading it at full width.</sub>
 
 **What a function page looks like:**
 

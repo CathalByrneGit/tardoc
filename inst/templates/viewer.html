@@ -74,6 +74,43 @@ code{background:#f1f3f5;padding:2px 6px;border-radius:4px;font-size:13px;
      font-family:"SF Mono",Monaco,monospace}
 pre{background:#1e1e2e;color:#cdd6f4;padding:16px;border-radius:8px;
     overflow-x:auto;margin:16px 0}
+
+/* Code blocks.
+   Short ones are left exactly as they were: the median function in a real
+   project is about a dozen lines, and capping that would add a scrollbar to
+   something that already fits and create a nested-scroll trap. Only the tail
+   is clamped. The pop-out is a separate affordance for a separate problem --
+   the content column is ~900px and long lines scroll sideways inside it. */
+.codewrap{position:relative;margin:16px 0}
+.codewrap pre{margin:0}
+.codewrap .pop{position:absolute;top:8px;right:8px;z-index:2;
+  background:#313244;color:#a6adc8;border:none;border-radius:5px;
+  padding:4px 8px;font-size:11px;cursor:pointer;opacity:0;transition:opacity .12s}
+.codewrap:hover .pop, .codewrap .pop:focus-visible{opacity:1}
+.codewrap .pop:hover{background:#45475a;color:#cdd6f4}
+.codewrap.clamped pre{max-height:640px;overflow-y:hidden}
+.codewrap .fade{position:absolute;left:0;right:0;bottom:0;height:96px;
+  pointer-events:none;border-radius:0 0 8px 8px;
+  background:linear-gradient(to bottom,rgba(30,30,46,0),#1e1e2e)}
+/* Above the fade, which spans the wrapper and would otherwise dim it. */
+.codewrap .more{position:relative;z-index:1;
+  display:block;width:100%;border:none;cursor:pointer;
+  background:#313244;color:#cdd6f4;font-size:12px;padding:8px;
+  border-radius:0 0 8px 8px;margin-top:-1px}
+.codewrap .more:hover{background:#45475a}
+
+/* Pop-out overlay: the reading surface a 200-line function actually wants. */
+#code-modal{position:fixed;inset:0;z-index:50;background:rgba(17,17,27,.96);
+  display:flex;flex-direction:column;padding:32px 40px}
+#code-modal[hidden]{display:none}
+#code-modal .bar{display:flex;align-items:center;gap:12px;margin-bottom:12px;
+  color:#cdd6f4;font-size:13px;flex-shrink:0}
+#code-modal .bar .title{font-weight:600}
+#code-modal .bar .hint{color:#6c7086;font-size:12px}
+#code-modal .bar button{margin-left:auto;background:#313244;color:#cdd6f4;
+  border:none;border-radius:6px;padding:6px 12px;font-size:12px;cursor:pointer}
+#code-modal .bar button:hover{background:#45475a}
+#code-modal pre{flex:1;min-height:0;overflow:auto;margin:0;font-size:13px}
 pre code{background:none;padding:0;color:inherit;font-size:13px}
 table{border-collapse:collapse;width:100%;margin:16px 0;font-size:14px}
 th{background:#f1f3f5;padding:8px 12px;text-align:left;border:1px solid #dee2e6;font-weight:600}
@@ -255,6 +292,15 @@ a{color:#6d28d9;text-decoration:none}a:hover{text-decoration:underline}
     </div>
     <div id="page-content" style="display:none"></div>
   </div>
+</div>
+
+<div id="code-modal" hidden role="dialog" aria-modal="true" aria-label="Code">
+  <div class="bar">
+    <span class="title" id="code-modal-title"></span>
+    <span class="hint" id="code-modal-lines"></span>
+    <button id="code-modal-close">Close &nbsp;Esc</button>
+  </div>
+  <pre><code id="code-modal-body"></code></pre>
 </div>
 
 <script>
@@ -913,6 +959,8 @@ function loadPage(type, name) {
     renderLocalGraph(host, name);
   });
 
+  enhanceCodeBlocks(contentEl, name);
+
   // Intercept .md links — route through loadPage
   contentEl.querySelectorAll('a').forEach(a => {
     const href = a.getAttribute('href') || '';
@@ -942,6 +990,74 @@ function loadPage(type, name) {
   window.scrollTo(0, 0);
   contentEl.parentElement.scrollTo(0, 0);
 }
+
+// Clamp only what is long, and give every block a way out to full screen.
+// 40 lines is roughly the 84th percentile of function length in real R code,
+// so the common case is untouched.
+const CODE_CLAMP_LINES = 40;
+
+function enhanceCodeBlocks(root, pageName) {
+  root.querySelectorAll('pre').forEach(function (pre) {
+    if (pre.closest('.codewrap') || pre.closest('.local-graph')) return;
+    const text  = pre.textContent || '';
+    const lines = text.replace(/\n$/, '').split('\n').length;
+
+    const wrap = document.createElement('div');
+    wrap.className = 'codewrap';
+    pre.parentNode.insertBefore(wrap, pre);
+    wrap.appendChild(pre);
+
+    const pop = document.createElement('button');
+    pop.className = 'pop';
+    pop.type = 'button';
+    pop.textContent = 'Expand';
+    pop.title = 'Open full screen';
+    pop.onclick = function () { openCodeModal(pageName, text, lines); };
+    wrap.appendChild(pop);
+
+    if (lines <= CODE_CLAMP_LINES) return;
+
+    wrap.classList.add('clamped');
+    const fade = document.createElement('div');
+    fade.className = 'fade';
+    wrap.appendChild(fade);
+
+    const more = document.createElement('button');
+    more.className = 'more';
+    more.type = 'button';
+    more.textContent = 'Show all ' + lines + ' lines';
+    more.onclick = function () {
+      wrap.classList.remove('clamped');
+      fade.remove();
+      more.remove();
+    };
+    wrap.appendChild(more);
+  });
+}
+
+function openCodeModal(title, text, lines) {
+  document.getElementById('code-modal-title').textContent = title || 'Code';
+  document.getElementById('code-modal-lines').textContent =
+    lines + (lines === 1 ? ' line' : ' lines');
+  document.getElementById('code-modal-body').textContent = text;
+  const m = document.getElementById('code-modal');
+  m.hidden = false;
+  document.getElementById('code-modal-close').focus();
+}
+
+function closeCodeModal() { document.getElementById('code-modal').hidden = true; }
+
+document.getElementById('code-modal-close').onclick = closeCodeModal;
+document.getElementById('code-modal').addEventListener('click', function (ev) {
+  // Backdrop only -- clicking the code itself should select, not dismiss.
+  if (ev.target.id === 'code-modal') closeCodeModal();
+});
+document.addEventListener('keydown', function (ev) {
+  if (ev.key === 'Escape' && !document.getElementById('code-modal').hidden) {
+    ev.stopPropagation();
+    closeCodeModal();
+  }
+}, true);
 
 function goHome() {
   document.getElementById('home-panel').style.display   = '';
