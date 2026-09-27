@@ -62,8 +62,10 @@ test_that("load_targets_data returns the documented fields", {
     tar_meta       = function(...) td$meta,
     .package = "targets"
   )
-  res <- suppressMessages(load_targets_data(cfg))
-  expect_named(res, c("meta", "target_names", "network", "manifest", "has_store"))
+  res <- suppressMessages(load_targets_data(cfg, check_outdated = FALSE))
+  expect_named(res, c("meta", "target_names", "network", "manifest",
+                      "has_store", "outdated", "progress"))
+  expect_null(res$outdated)
   expect_setequal(res$target_names, td$target_names)
   expect_false(res$has_store)
 })

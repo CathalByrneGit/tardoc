@@ -4,19 +4,22 @@
 \alias{.dag_node}
 \title{Build one graph node}
 \usage{
-.dag_node(prow, verts, meta, manifest, edges)
+.dag_node(prow, targets_data, verts, edges)
 }
 \arguments{
 \item{prow}{One row of the \code{\link[=dag_layout]{dag_layout()}} result.}
 
-\item{verts, meta, manifest, edges}{Data frames from \code{\link[=build_dag_graph]{build_dag_graph()}}.}
+\item{targets_data}{Output of \code{\link[=load_targets_data]{load_targets_data()}}.}
+
+\item{verts, edges}{Data frames from \code{\link[=build_dag_graph]{build_dag_graph()}}.}
 }
 \value{
 A list describing one node.
 }
 \description{
-Split out of \code{\link[=build_dag_graph]{build_dag_graph()}} so that function stays within the project's
-complexity budget: assembling a node touches four data sources and a dozen
-optional fields.
+Split out of \code{\link[=build_dag_graph]{build_dag_graph()}} so that function stays within the
+project's complexity budget. The node's content comes from
+\code{\link[=.target_facts]{.target_facts()}}, the same call the target's markdown page makes, so the
+inspect panel and the page cannot drift apart.
 }
 \keyword{internal}

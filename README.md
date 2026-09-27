@@ -53,6 +53,7 @@ my_project/
     ├── analytics.html           tier 3 shell, needs view_tardoc_db()
     ├── search_index.json
     ├── tardoc_analytics.json
+    ├── history.json             one snapshot per build, for the run diff
     ├── targets/
     │   └── clean_data.md        one .md per target
     ├── functions/
@@ -68,11 +69,29 @@ my_project/
 
 - An interactive pipeline graph on the home page — drag to pan, scroll to zoom, minimap, and a **show functions** toggle that adds the functions each target calls as dashed nodes
 - Click any node to open an inspect panel: description, command, branching pattern, errors, build details, and clickable upstream / downstream neighbours
+- **A sidebar that survives scale** — targets are grouped by status, with errored and outdated listed in full and the healthy majority capped. Functions group by the file that defines them. Search reaches everything else
+
+![The sidebar grouped by status: five outdated targets listed first, then the two that are up to date](man/figures/viewer-sidebar-groups.png)
+
+<sub>The default view answers "what needs attention" rather than listing everything alphabetically. See [On large pipelines](#on-large-pipelines) for how this behaves at 420 targets.</sub>
 - Fuzzy search across targets, functions, descriptions, and commands
-- Per target: R command, build status, last built timestamp, functions called, and a local dependency graph centred on that target
+- **Freshness, not just errors** — every target is classified `Up-to-date`, `Outdated`, `Errored` or `Not built`. Outdated comes from [`tar_outdated()`](https://docs.ropensci.org/targets/reference/tar_outdated.html): a target whose command, dependencies or upstream targets changed since it was built, even though it never errored
+- Per target: status, last built, what it did on the last run, branching pattern, runtime, size, errors, warnings, R command, functions called, and a local dependency graph centred on that target — the same fields the graph's inspect panel shows
+
+![The viewer after an upstream function changed: two targets up to date, five marked outdated](man/figures/viewer-outdated.png)
+
+<sub>Staleness propagates. Editing one function marked `clean` and everything downstream of it outdated, while `raw_path` and `readings` stayed current — the distinction an error-only status cannot draw.</sub>
+
 - Per function: rendered roxygen docs, full source code
 - Notes panel — content from `notes/` files appears at the bottom of each page
+- **Where the time goes** — slowest and largest targets, and the **critical path**: the longest dependency chain, whose total is the floor on a full rebuild however many workers you give it. Toggle it on the graph to see which chain to optimise
+- **Since the last build** — what rebuilt, what changed status, what got meaningfully slower or larger. A snapshot per build is appended to `tardoc/history.json`
+- **Per-branch detail** — a dynamic target lists each branch with its own runtime, size and error. Failed branches are always listed, however many branches there are
 - Deep links — `viewer.html#targets:clean` opens that page directly, and selecting a page updates the hash
+
+![The critical path highlighted on the graph, with the run diff and the slowest and largest targets below](man/figures/viewer-profile.png)
+
+<sub>**critical path** dims everything off the longest dependency chain. Below it, the run diff names what rebuilt since the previous build, and the rankings show where the time and space go — every bar is a link to that target's page.</sub>
 
 **What a target page looks like:**
 
@@ -304,6 +323,89 @@ The browser sends a plain text message to the `/chat` httpuv endpoint. ellmer pr
 
 ---
 
+## On large pipelines
+
+Checked against a synthetic pipeline of **420 targets and 120 functions**.
+
+A flat sidebar does not survive that: it was 420 rows and 12,600px of scroll,
+of which a 900px viewport showed 7%. Now the default list is grouped and
+capped at 40 — **errored and outdated targets are never truncated**, because
+they are the reason you opened the page, while the healthy majority is
+summarised as *Showing 40 of 420 · show all*. Functions group by source file.
+Navigating to something the cap hides pins it at the top under **Current**, so
+the sidebar always shows where you are.
+
+Search reaches the rest. It spans targets and functions together, since you
+rarely know in advance whether what you want is a target or the function
+behind it, and it is weighted toward names so exact matches rank first.
+
+### Grouping the graph
+
+420 nodes in a layered layout is a line nobody can read. When tardoc can find
+a grouping worth offering, the overview gets a **group** toggle that collapses
+it to one node per group; clicking a group drills into it, and *back to
+groups* returns. The flat graph stays the default — grouping is an option, not
+a rewrite of the view.
+
+![The 420-target pipeline collapsed to six group nodes, each labelled with its file and target count](man/figures/viewer-grouped.png)
+
+The groups are found rather than configured. [`target_groups()`](#target_groupstargets_data-cfg-method) tries four
+signals in descending order of authority and takes the first that clears a
+quality bar:
+
+| Signal | What it uses |
+|---|---|
+| `declaration` | The file each target is declared in — parsed from `_targets.R` and everything it sources. A project split into `targets/ingest.R`, `targets/model.R` has already declared its grouping |
+| `functions` | The source file of the functions a target calls |
+| `prefix` | A shared name prefix: `ingest_01`, `ingest_02` → `ingest` |
+| `depth` | Bands of dependency depth. A last resort |
+
+A grouping only counts if it has 2–20 groups, averages at least three members
+each, and has no group holding more than 70% of the pipeline — so a bad
+grouping is rejected rather than shown. Below 15 targets `auto` does not group
+at all: seven targets read fine as a list.
+
+**Authority beats arithmetic.** On a long chain, depth bands score *better*
+than a name prefix — six tidy bands against three uneven groups — but they are
+the worse reading of the pipeline. Taking the first signal past the bar rather
+than the highest-scoring one is what keeps the precedence meaningful. There is
+a test pinning exactly that.
+
+Force or disable it with `document_targets(group_by = "declaration")`,
+`"prefix"`, `"none"` and so on. A named method is honoured even when it falls
+short of the bar; only `"auto"` is fussy.
+
+### Still open
+
+The viewer is a single self-contained file — 1.1 MB for this pipeline — and it
+grows with the number of pages. Roughly a third of that is the graph payload,
+much of which duplicates the search index, so slimming it is the next move;
+splitting pages into separately fetched files would scale further but costs
+`file://` support, which is worth more.
+
+---
+
+## Publishing to GitHub Pages
+
+Docs that live on someone's laptop get stale. A workflow ships with the package that regenerates them from `_targets.R` on every push and publishes the tier 1 viewer:
+
+```r
+file.copy(
+  system.file("templates", "pipeline-docs.yaml", package = "tardoc"),
+  ".github/workflows/docs.yaml"
+)
+```
+
+Then enable **Settings → Pages → Source: GitHub Actions**. The site rebuilds on every push to `main`, so it cannot drift from the pipeline.
+
+**Running the pipeline in CI is optional.** `tar_manifest()` and `tar_network()` read `_targets.R` alone, so the docs build without a store — every page renders, with status `Not built`. Keep the `tar_make()` step and you additionally get build status, timings, sizes and the outdated flags. Drop it if your pipeline is slow, needs credentials, or touches data CI cannot reach.
+
+The template also carries an optional **staleness job** that fails the build when a committed `tardoc/` no longer matches what `document_targets()` produces — the same idea as the `man/` freshness check in this repo's own CI. Delete that job if you do not commit the generated docs.
+
+This repository dogfoods it: [`.github/workflows/pages.yaml`](.github/workflows/pages.yaml) publishes the example pipeline in [`inst/examples/station-monitoring`](inst/examples/station-monitoring), so the live site is generated by the same code path you would use.
+
+---
+
 ## MCP — Claude Desktop and Claude Code
 
 ```r
@@ -382,6 +484,19 @@ The graph data and layout used by the viewer. `build_dag_graph()` returns the
 `{nodes, edges}` list React Flow consumes; `dag_layout()` assigns each node a
 column by longest-path depth. Exported so you can build a graph of your own.
 
+### `pipeline_profile(targets_data, top = 10)` / `critical_path(nodes, edges)`
+
+Where a run spends its time and space. `pipeline_profile()` returns totals,
+the slowest and largest targets, and the critical path; `critical_path()` is
+the underlying longest-weight walk and is useful on its own.
+
+### `record_run_snapshot(targets_data, cfg)` / `read_run_history(cfg)` / `diff_run_history(history)`
+
+The run history behind **Since the last build**. `record_run_snapshot()` is
+called for you during `document_targets()` and appends to
+`tardoc/history.json` only when something differs from the previous build.
+`diff_run_history()` compares the two most recent snapshots.
+
 ### `get_fn_docs(fn_name, file)`
 
 Returns roxygen documentation for a single function as a markdown string.
@@ -413,7 +528,11 @@ Generate `.Rd` files from roxygen comments without a formal package structure.
 
 No. `tar_manifest()` and `tar_network()` only require `_targets.R`. The full documentation can be generated from a pipeline that has never been run.
 
-If a store is present, build status and timestamps appear on target pages.
+If a store is present, build status and timestamps appear on target pages. Without one every target reads `Not built`, which is accurate rather than a gap.
+
+`tar_outdated()` re-hashes files and dependencies, so on a large pipeline it costs a few seconds. Pass `document_targets(check_outdated = FALSE)` to skip it; status then falls back to reporting errors only.
+
+A dynamically branched target is a special case worth knowing about: its own metadata row carries no build time — only its branches do — and its errors live on the branch rows too. tardoc reads the branches, so a branched target that has run reports `Up-to-date`, and one with a failed branch reports `Errored` rather than hiding it.
 
 ---
 

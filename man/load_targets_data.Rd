@@ -4,10 +4,17 @@
 \alias{load_targets_data}
 \title{Load all targets project data}
 \usage{
-load_targets_data(cfg)
+load_targets_data(cfg, check_outdated = TRUE)
 }
 \arguments{
 \item{cfg}{A site config list produced by \code{\link[=build_site_config]{build_site_config()}}.}
+
+\item{check_outdated}{Logical. Call \code{\link[targets:tar_outdated]{targets::tar_outdated()}} to find which
+targets are stale. This is what separates "did not error last run" from
+"still current": a target whose upstream changed is outdated even though
+it never errored. It re-hashes files and dependencies, so on a large
+pipeline it costs a few seconds -- pass \code{FALSE} to skip it and fall back
+to the error-only classification.}
 }
 \value{
 A named list with:
@@ -18,6 +25,10 @@ no store exists.}
 \item{network}{List from \code{\link[targets:tar_network]{targets::tar_network()}}.}
 \item{manifest}{Tibble from \code{\link[targets:tar_manifest]{targets::tar_manifest()}}.}
 \item{has_store}{Logical. Whether a store was found.}
+\item{outdated}{Character vector of stale target names, or \code{NULL} when
+the check was skipped or failed.}
+\item{progress}{Tibble from \code{\link[targets:tar_progress]{targets::tar_progress()}} -- what each target
+did on the last run -- or \code{NULL} without a store.}
 }
 }
 \description{

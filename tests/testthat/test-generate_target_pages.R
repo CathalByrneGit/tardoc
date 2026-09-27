@@ -45,28 +45,64 @@ test_that(".local_mermaid handles target with no edges", {
 })
 
 # ---- .build_target_generated_block -----------------------------------------
+#
+# The block is now rendered from .target_facts(), the same list the graph's
+# inspect panel reads, so these build one and hand it over.
+
+block_fixture <- function(error = NA_character_, outdated = NULL,
+                          warnings = NA_character_) {
+  list(
+    meta = dplyr::tibble(name = "t", type = "stem", time = "2024-01-01",
+                         error = error, warnings = warnings,
+                         bytes = 1, format = "rds"),
+    manifest = dplyr::tibble(name = "t", command = "do_thing(x)",
+                             description = "", pattern = ""),
+    network  = list(vertices = dplyr::tibble(name = "t", type = "stem"),
+                    edges    = dplyr::tibble(from = character(), to = character())),
+    outdated = outdated, progress = NULL, has_store = TRUE
+  )
+}
+
+empty_dep <- function() {
+  list(upstream = character(), downstream = character(),
+       edges = dplyr::tibble(from = character(), to = character()))
+}
+
+no_fns <- function() dplyr::tibble(name = character(), type = character())
 
 test_that(".build_target_generated_block includes command", {
-  meta <- dplyr::tibble(name="t",type="stem",time="2024-01-01",error=NA_character_,bytes=1,format="rds")
-  fns  <- dplyr::tibble(name=character(),type=character())
-  dep  <- list(upstream=character(),downstream=character(),edges=dplyr::tibble(from=character(),to=character()))
-  block <- tardoc:::.build_target_generated_block("t", meta, "do_thing(x)", fns, dep)
+  facts <- tardoc:::.target_facts("t", block_fixture())
+  block <- tardoc:::.build_target_generated_block("t", facts, no_fns(), empty_dep())
   expect_match(block, "do_thing\\(x\\)")
   expect_match(block, "```r")
 })
 
-test_that(".build_target_generated_block shows Up-to-date when no error", {
-  meta <- dplyr::tibble(name="t",type="stem",time="2024-01-01",error=NA_character_,bytes=1,format="rds")
-  fns  <- dplyr::tibble(name=character(),type=character())
-  dep  <- list(upstream=character(),downstream=character(),edges=dplyr::tibble(from=character(),to=character()))
-  expect_match(tardoc:::.build_target_generated_block("t", meta, "cmd()", fns, dep), "Up-to-date")
+test_that(".build_target_generated_block shows Up-to-date when current", {
+  facts <- tardoc:::.target_facts("t", block_fixture())
+  expect_match(tardoc:::.build_target_generated_block("t", facts, no_fns(), empty_dep()),
+               "Up-to-date")
+})
+
+test_that(".build_target_generated_block shows Outdated when stale", {
+  # The distinction the old error-only status could not make.
+  facts <- tardoc:::.target_facts("t", block_fixture(outdated = "t"))
+  block <- tardoc:::.build_target_generated_block("t", facts, no_fns(), empty_dep())
+  expect_match(block, "Outdated")
+  expect_false(grepl("Up-to-date", block, fixed = TRUE))
 })
 
 test_that(".build_target_generated_block includes error when present", {
-  meta <- dplyr::tibble(name="t",type="stem",time="2024-01-01",error="object not found",bytes=1,format="rds")
-  fns  <- dplyr::tibble(name=character(),type=character())
-  dep  <- list(upstream=character(),downstream=character(),edges=dplyr::tibble(from=character(),to=character()))
-  expect_match(tardoc:::.build_target_generated_block("t", meta, "cmd()", fns, dep), "object not found")
+  facts <- tardoc:::.target_facts("t", block_fixture(error = "object not found"))
+  block <- tardoc:::.build_target_generated_block("t", facts, no_fns(), empty_dep())
+  expect_match(block, "object not found")
+  expect_match(block, "## Error")
+})
+
+test_that(".build_target_generated_block includes warnings when present", {
+  facts <- tardoc:::.target_facts("t", block_fixture(warnings = "NaNs produced"))
+  block <- tardoc:::.build_target_generated_block("t", facts, no_fns(), empty_dep())
+  expect_match(block, "## Warnings")
+  expect_match(block, "NaNs produced")
 })
 
 # ---- .write_generated_md / preservation ------------------------------------

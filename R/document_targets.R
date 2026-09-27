@@ -25,6 +25,15 @@
 #' @param llm_api_key   API key. `NULL` reads the env var.
 #' @param llm_base_url  Base URL for `"openai_compatible"` provider (e.g. a
 #'   llama.cpp server: `"http://localhost:8080/v1"`).
+#' @param group_by How the pipeline overview may be collapsed into groups:
+#'   `"auto"` picks a grouping signal and rejects the lot when none scores
+#'   well, `"none"` disables it, or name one of `"declaration"`, `"functions"`,
+#'   `"prefix"`, `"depth"` to force it. See [target_groups()]. Grouping only
+#'   adds an option in the viewer -- the flat graph stays the default view.
+#' @param check_outdated Logical. Call [targets::tar_outdated()] so pages and
+#'   the graph can tell a stale target from a current one. It re-hashes
+#'   dependencies, so pass `FALSE` on a large pipeline to skip it; status then
+#'   falls back to reporting errors only.
 #'
 #' @return The `cfg` list, invisibly.
 #' @export
@@ -57,14 +66,20 @@ document_targets <- function(project_path  = ".",
                               llm_provider  = "openai",
                               llm_model     = NULL,
                               llm_api_key   = NULL,
-                              llm_base_url  = NULL) {
+                              llm_base_url  = NULL,
+                              check_outdated = TRUE,
+                              group_by      = "auto") {
 
   cfg <- build_site_config(project_path, site_dir, repo_url)
   setup_site_dirs(cfg)
 
-  targets_data   <- load_targets_data(cfg)
+  targets_data   <- load_targets_data(cfg, check_outdated = check_outdated)
   target_names   <- generate_all_target_pages(targets_data, cfg)
   function_names <- generate_all_function_pages(cfg)
+
+  # Before the viewer, so this run's figures are in the history the viewer
+  # embeds -- the diff shown is then between this build and the one before.
+  record_run_snapshot(targets_data, cfg)
 
   generate_notes(target_names, function_names, cfg)
   generate_search_index(targets_data, function_names, cfg)
@@ -86,7 +101,8 @@ document_targets <- function(project_path  = ".",
   }
 
   # Tier 1: self-contained viewer
-  generate_viewer(targets_data, function_names, cfg, pkg_name)
+  generate_viewer(targets_data, function_names, cfg, pkg_name,
+                  group_by = group_by)
 
   # Generate analytics data (used by both WASM and server analytics)
   analytics_data <- .build_analytics_data(targets_data, function_names, cfg)
@@ -446,7 +462,8 @@ serve_tardoc_mcp <- function(project_path = ".", site_dir = "tardoc", port = 876
     )
     desc       <- .ad_pull_desc(manifest_row)
     command    <- dplyr::pull(manifest_row, "command")
-    status     <- if (is.na(meta_row$error)) "uptodate" else "errored"
+    status     <- .target_status(tn, targets_data$meta, targets_data$outdated,
+                                isTRUE(targets_data$has_store))
     last_built <- as.character(meta_row$time)
     list(
       name = tn, description = if (is.na(desc)) "" else desc,

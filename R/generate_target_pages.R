@@ -16,9 +16,7 @@ generate_all_target_pages <- function(targets_data, cfg) {
   for (target_name in targets_data$target_names) {
     message("Target: ", target_name)
 
-    target_meta  <- dplyr::filter(targets_data$meta, .data$name == target_name)
     manifest_row <- dplyr::filter(targets_data$manifest, .data$name == target_name)
-    command_str  <- dplyr::pull(manifest_row, "command")
     description  <- .pull_description(manifest_row)
 
     dependency <- get_target_network_dependencies(
@@ -36,7 +34,9 @@ generate_all_target_pages <- function(targets_data, cfg) {
 
     repo_link       <- .target_repo_link(target_name, cfg)
     generated_block <- .build_target_generated_block(
-      target_name, target_meta, command_str, functions, dependency, repo_link
+      target_name, .target_facts(target_name, targets_data),
+      functions, dependency, repo_link,
+      branches = .target_branches(target_name, targets_data$meta)
     )
 
     out_path <- file.path(cfg$targets_dir, paste0(target_name, ".md"))
@@ -55,11 +55,10 @@ generate_all_target_pages <- function(targets_data, cfg) {
   if (length(val) == 0 || is.na(val) || nchar(trimws(val)) == 0) NA_character_ else val
 }
 
-.build_target_generated_block <- function(target_name, target_meta,
-                                           command_str, functions, dependency,
-                                           repo_link = "") {
-  status <- if (is.na(target_meta$error)) "Up-to-date" else target_meta$error
-
+.build_target_generated_block <- function(target_name, facts,
+                                          functions, dependency,
+                                          repo_link = "",
+                                          branches = NULL) {
   fn_links <- if (nrow(functions) == 0) {
     "_No distinct functions identified._"
   } else {
@@ -67,22 +66,98 @@ generate_all_target_pages <- function(targets_data, cfg) {
            collapse = ", ")
   }
 
-  mermaid <- .local_mermaid(target_name, dependency)
-
   paste0(
     "## Details\n\n",
-    "| Field | Value |\n",
-    "|---|---|\n",
-    "| **Status** | ", status, " |\n",
-    "| **Last built** | ", as.character(target_meta$time), " |\n\n",
+    .facts_table(facts),
+    .facts_sections(facts),
+    if (is.null(branches)) "" else .branches_section(branches),
     "## Command\n\n",
-    "```r\n", command_str, "\n```\n\n",
+    "```r\n", facts$command, "\n```\n\n",
     "## Functions called\n\n",
     fn_links, "\n\n",
     "## Local dependency graph\n\n",
-    mermaid, "\n",
+    .local_mermaid(target_name, dependency), "\n",
     repo_link
   )
+}
+
+#' Render the details table shared with the graph's inspect panel
+#'
+#' The panel showed a dozen fields the page did not -- branching, warnings,
+#' runtime, size, storage settings. Both now read the same [.target_facts()]
+#' list, so a field added there appears in both places.
+#'
+#' Defaults are omitted: `repository: local` and `iteration: vector` are true
+#' of nearly every target and would be noise on every page.
+#'
+#' @param facts A list from [.target_facts()].
+#' @return A markdown table.
+#' @keywords internal
+.facts_table <- function(facts) {
+  rows <- list(c("Status", facts$status_label))
+  add  <- function(label, value) {
+    if (nzchar(value)) rows[[length(rows) + 1L]] <<- c(label, value)
+  }
+
+  add("Last built", facts$last_built)
+  add("Last run",   facts$progress)
+  if (facts$branched) {
+    add("Branching", paste0("`", facts$pattern, "`",
+                            if (facts$n_branches > 0)
+                              paste0(" &mdash; ", facts$n_branches, " branches")
+                            else ""))
+  }
+  if (!is.na(facts$seconds)) add("Runtime", .fmt_seconds(facts$seconds))
+  if (!is.na(facts$bytes))   add("Size",    .fmt_bytes(facts$bytes))
+  add("Format", if (identical(facts$format, "rds")) "" else facts$format)
+  add("Repository", if (identical(facts$repository, "local")) "" else facts$repository)
+  add("Iteration",  if (identical(facts$iteration, "vector")) "" else facts$iteration)
+
+  paste0(
+    "| Field | Value |\n|---|---|\n",
+    paste0("| **", vapply(rows, `[`, "", 1), "** | ",
+           vapply(rows, `[`, "", 2), " |", collapse = "\n"),
+    "\n\n"
+  )
+}
+
+#' Error and warning sections, when there are any
+#' @param facts A list from [.target_facts()].
+#' @return A markdown string, empty when the target built cleanly.
+#' @keywords internal
+.facts_sections <- function(facts) {
+  out <- ""
+  if (nzchar(facts$error)) {
+    out <- paste0(out, "## Error\n\n```\n", facts$error, "\n```\n\n")
+  }
+  # Warnings live in tar_meta() and previously surfaced nowhere at all: not on
+  # this page, not in the search index, not in llms.txt.
+  if (nzchar(facts$warnings)) {
+    out <- paste0(out, "## Warnings\n\n```\n", facts$warnings, "\n```\n\n")
+  }
+  out
+}
+
+#' Format a duration the way the inspect panel does
+#' @param s Numeric seconds.
+#' @return A display string.
+#' @keywords internal
+.fmt_seconds <- function(s) {
+  if (is.na(s)) return("")
+  if (s < 1)    return(paste0(round(s * 1000), " ms"))
+  if (s < 60)   return(paste0(signif(s, 3), " s"))
+  paste0(floor(s / 60), "m ", round(s %% 60), "s")
+}
+
+#' Format a byte count the way the inspect panel does
+#' @param b Numeric bytes.
+#' @return A display string.
+#' @keywords internal
+.fmt_bytes <- function(b) {
+  if (is.na(b)) return("")
+  units <- c("B", "kB", "MB", "GB", "TB")
+  i <- if (b <= 0) 1L else min(length(units), 1L + floor(log(b, 1000)))
+  paste(signif(b / 1000^(i - 1), 3), units[i])
 }
 
 #' Generate a mermaid graph string for local dependencies (2 hops)

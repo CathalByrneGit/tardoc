@@ -175,7 +175,8 @@ generate_tardoc_db <- function(targets_data, function_names, cfg,
     )
     desc       <- .pull_desc_db(manifest_row)
     command    <- dplyr::pull(manifest_row, "command")
-    status     <- if (is.na(meta_row$error)) "uptodate" else "errored"
+    status     <- .target_status(tn, targets_data$meta, targets_data$outdated,
+                                isTRUE(targets_data$has_store))
     last_built <- as.character(meta_row$time)
     data.frame(
       name         = tn,

@@ -9,6 +9,12 @@
 #' `meta` is filled with `NA`s so all downstream functions still work.
 #'
 #' @param cfg A site config list produced by [build_site_config()].
+#' @param check_outdated Logical. Call [targets::tar_outdated()] to find which
+#'   targets are stale. This is what separates "did not error last run" from
+#'   "still current": a target whose upstream changed is outdated even though
+#'   it never errored. It re-hashes files and dependencies, so on a large
+#'   pipeline it costs a few seconds -- pass `FALSE` to skip it and fall back
+#'   to the error-only classification.
 #'
 #' @return A named list with:
 #' \describe{
@@ -18,9 +24,13 @@
 #'   \item{network}{List from [targets::tar_network()].}
 #'   \item{manifest}{Tibble from [targets::tar_manifest()].}
 #'   \item{has_store}{Logical. Whether a store was found.}
+#'   \item{outdated}{Character vector of stale target names, or `NULL` when
+#'     the check was skipped or failed.}
+#'   \item{progress}{Tibble from [targets::tar_progress()] -- what each target
+#'     did on the last run -- or `NULL` without a store.}
 #' }
 #' @export
-load_targets_data <- function(cfg) {
+load_targets_data <- function(cfg, check_outdated = TRUE) {
   # All targets:: calls must run from the project directory so they find
   # _targets.R and the store, regardless of the caller's working directory.
   withr::with_dir(cfg$project_path, {
@@ -34,12 +44,34 @@ load_targets_data <- function(cfg) {
     # Meta needs the store -------------------------------------------------
     has_store <- file.exists(cfg$targets_store)
 
+    progress <- NULL
     if (has_store) {
       meta <- targets::tar_meta(fields = targets::everything())
+      progress <- tryCatch(targets::tar_progress(), error = function(e) NULL)
       message("Store found -- run metadata loaded.")
     } else {
       message("No store found -- status and timestamps will be unavailable.")
       meta <- .empty_meta(target_names)
+    }
+
+    # Staleness is a property of the pipeline definition, not the store, so
+    # this is worth asking even before a first run -- it then reports every
+    # target, which is correct. Wrapped because it evaluates _targets.R and a
+    # pipeline that cannot be loaded should degrade, not abort the docs build.
+    outdated <- NULL
+    if (isTRUE(check_outdated)) {
+      outdated <- tryCatch(
+        as.character(targets::tar_outdated(reporter = "silent")),
+        error = function(e) {
+          message("Could not determine outdated targets (", conditionMessage(e),
+                  ") -- falling back to error-only status.")
+          NULL
+        }
+      )
+      if (!is.null(outdated)) {
+        message(length(outdated), " of ", length(target_names),
+                " targets are outdated.")
+      }
     }
   })
 
@@ -50,7 +82,9 @@ load_targets_data <- function(cfg) {
     target_names = target_names,
     network      = network,
     manifest     = manifest,
-    has_store    = has_store
+    has_store    = has_store,
+    outdated     = outdated,
+    progress     = progress
   )
 }
 

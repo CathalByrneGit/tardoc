@@ -54,13 +54,14 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
 .badge{display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;margin-left:8px}
 .badge-ok{background:#d1fae5;color:#065f46}
 .badge-err{background:#fee2e2;color:#991b1b}
+.badge-warn{background:#fef3c7;color:#92400e}
 .badge-na{background:#f3f4f6;color:#6b7280}
 #main{flex:1;overflow:hidden;display:flex;flex-direction:column}
 #content-area{flex:1;overflow-y:auto;padding:32px 40px}
 #home-panel{max-width:900px;margin:0 auto}
 #home-panel h1{font-size:28px;margin-bottom:8px}
 #home-panel p{color:#6c7086;font-size:15px;margin-bottom:24px}
-.stat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:24px 0}
+.stat-grid{display:grid;gap:12px;margin:24px 0;grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
 .stat-card{background:#fff;border:1px solid #e9ecef;border-radius:8px;padding:16px;text-align:center}
 .stat-number{font-size:32px;font-weight:700;color:#6d28d9}
 .stat-label{font-size:13px;color:#6c7086;margin-top:4px}
@@ -103,6 +104,8 @@ a{color:#6d28d9;text-decoration:none}a:hover{text-decoration:underline}
 #rf-panel .tag{font-size:10px;padding:2px 7px;border-radius:9px;background:#313244;color:#9399b2}
 #rf-panel .tag.uptodate{color:#a6e3a1}
 #rf-panel .tag.errored{color:#f38ba8}
+#rf-panel .tag.outdated{color:#f9e2af}
+#rf-panel .tag.unbuilt{color:#6c7086}
 #rf-panel .tag.branched{color:#f9e2af}
 #rf-panel h4{font-size:10px;text-transform:uppercase;letter-spacing:.09em;color:#6c7086;
   margin:14px 0 5px;font-weight:600}
@@ -124,10 +127,40 @@ a{color:#6d28d9;text-decoration:none}a:hover{text-decoration:underline}
   min-width:132px;color:#cdd6f4;font-size:12.5px;line-height:1.35;cursor:pointer}
 .tnode:hover{border-color:#a78bfa}
 .tnode.errored{border-color:#f38ba8}
+.tnode.outdated{border-color:#f9e2af}
+.tnode.unbuilt{border-style:dotted;opacity:.75}
+/* A collapsed group reads as a container, not a target. */
+.tnode.group{min-width:150px;border-width:2px;background:#232334}
+.tnode.group .nm{font-size:13px}
+.tnode.group .ct{font-size:11px;color:#9399b2;margin-top:2px}
+.tnode.group .warn{color:#f9e2af}
+.tnode.group .err{color:#f38ba8}
+#grp-crumb{font-size:12px;color:#6c7086;margin-left:4px}
+#grp-crumb b{color:#cba6f7}
+#grp-crumb button{background:none;border:none;color:#89b4fa;cursor:pointer;
+                  font-size:12px;padding:0 0 0 6px;text-decoration:underline}
+/* Critical path: dim everything else rather than recolour the path, so
+   status colours stay readable while it is on. */
+#rf-graph.cp-on .react-flow__node:not(.cp) .tnode{opacity:.28}
+#rf-graph.cp-on .react-flow__node.cp .tnode{border-color:#cba6f7;box-shadow:0 0 0 1px #cba6f7}
+.profile-cols{display:grid;gap:20px;grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
+.profile-cols h3{font-size:13px;margin:16px 0 8px}
+.bar-row{display:grid;grid-template-columns:1fr 60px;gap:8px;align-items:center;
+         font-size:12px;margin-bottom:5px}
+.bar-row .bar-name{position:relative;padding:3px 6px;border-radius:4px;overflow:hidden;
+                   white-space:nowrap;text-overflow:ellipsis;cursor:pointer}
+.bar-row .bar-fill{position:absolute;inset:0;background:#ede9fe;border-radius:4px;z-index:0}
+.bar-row .bar-name span{position:relative;z-index:1}
+.bar-row .bar-val{text-align:right;color:#6b7280;font-variant-numeric:tabular-nums}
+#since-body ul{margin:6px 0 14px;padding-left:20px;font-size:13px;line-height:1.7}
+#since-body h3{font-size:13px;margin:14px 0 4px}
+#since-body code{font-size:12px}
 .tnode .nm{font-weight:600}
 .tnode .st{font-size:10.5px;color:#6c7086;margin-top:2px}
 .tnode.uptodate .st{color:#a6e3a1}
 .tnode.errored .st{color:#f38ba8}
+.tnode.outdated .st{color:#f9e2af}
+.tnode.unbuilt .st{color:#6c7086}
 .tnode .br{font-size:10px;color:#f9e2af;margin-top:1px}
 .react-flow__node.selected .tnode{border-color:#a78bfa}
 .notes-section{margin-top:32px;padding:20px 24px;background:#fffbf0;
@@ -135,6 +168,18 @@ a{color:#6d28d9;text-decoration:none}a:hover{text-decoration:underline}
 .notes-section h2{font-size:16px;color:#92400e;margin-bottom:12px;margin-top:0}
 .notes-section p,.notes-section li{font-size:14px;color:#451a03;line-height:1.7}
 .no-content{color:#6c7086;font-style:italic;padding:40px;text-align:center}
+/* Sticky, so you always know which group you are scrolling through. */
+.nav-group{position:sticky;top:0;z-index:1;background:#181825;
+           display:flex;justify-content:space-between;align-items:center;
+           padding:7px 16px 5px;font-size:10px;font-weight:600;color:#6c7086;
+           text-transform:uppercase;letter-spacing:.7px;
+           border-bottom:1px solid #313244}
+.nav-group span{font-weight:500;letter-spacing:0;text-transform:none;font-size:11px}
+.nav-more{padding:10px 16px;font-size:11px;color:#6c7086;cursor:pointer;
+          border-top:1px solid #313244;margin-top:4px}
+.nav-more:hover{background:#313244;color:#cdd6f4}
+.nav-more b{color:#cba6f7;font-weight:600}
+.nav-more-hint{margin-top:2px;font-size:10px;color:#585b70;cursor:default}
 .search-result{padding:10px 16px;cursor:pointer;border-radius:6px;margin:2px 0}
 .search-result:hover{background:#313244}
 .search-result-name{font-size:13px;color:#cdd6f4}
@@ -176,15 +221,37 @@ a{color:#6d28d9;text-decoration:none}a:hover{text-decoration:underline}
           <div class="stat-number" id="stat-status">-</div>
           <div class="stat-label">Up-to-date</div>
         </div>
+        <div class="stat-card" id="stat-outdated-card" style="display:none">
+          <div class="stat-number" id="stat-outdated">-</div>
+          <div class="stat-label">Outdated</div>
+        </div>
       </div>
       <h2>Pipeline overview</h2>
       <p class="graph-hint">Click a node for details &middot; drag to pan &middot; scroll to zoom
         <label class="fn-toggle"><input type="checkbox" id="show-functions"> show functions</label>
+        <label class="fn-toggle" id="cp-toggle-wrap" style="display:none"><input type="checkbox" id="show-critical"> critical path</label>
+        <label class="fn-toggle" id="grp-toggle-wrap" style="display:none"><input type="checkbox" id="show-groups"> group</label>
+        <span id="grp-crumb" style="display:none"></span>
       </p>
       <div id="rf-stage">
         <div id="rf-graph"></div>
         <aside id="rf-panel" hidden aria-label="Target details"></aside>
       </div>
+
+      <section id="since-last" style="display:none">
+        <h2>Since the last build</h2>
+        <p class="graph-hint" id="since-when"></p>
+        <div id="since-body"></div>
+      </section>
+
+      <section id="profile" style="display:none">
+        <h2>Where the time goes</h2>
+        <p class="graph-hint" id="profile-summary"></p>
+        <div class="profile-cols">
+          <div><h3>Slowest targets</h3><div id="profile-slowest"></div></div>
+          <div><h3>Largest targets</h3><div id="profile-largest"></div></div>
+        </div>
+      </section>
     </div>
     <div id="page-content" style="display:none"></div>
   </div>
@@ -195,6 +262,8 @@ const PAGES    = {{PAGES_JSON}};
 const INDEX    = {{INDEX_JSON}};
 const PKG_NAME = {{PKG_NAME_JSON}};
 const GRAPH    = {{GRAPH_JSON}};
+const PROFILE  = {{PROFILE_JSON}};
+const HISTORY  = {{HISTORY_JSON}};
 
 const PAGE_MAP = {};
 PAGES.forEach(p => { PAGE_MAP[p.type + ':' + p.name] = p; });
@@ -208,6 +277,99 @@ document.getElementById('stat-targets').textContent   = targets.length;
 document.getElementById('stat-functions').textContent = functions.length;
 document.getElementById('stat-status').textContent    =
   targets.filter(t => t.status === 'uptodate').length;
+// Only shown when there is something to report -- a fully current pipeline
+// does not need a zero staring at it.
+const nOutdated = targets.filter(t => t.status === 'outdated').length;
+if (nOutdated > 0) {
+  document.getElementById('stat-outdated').textContent = nOutdated;
+  document.getElementById('stat-outdated-card').style.display = '';
+}
+
+// ---- where the time goes -------------------------------------------------
+// seconds and bytes have always been in tar_meta(); nothing used them beyond
+// printing one target's figure on its own page.
+
+function fmtSecsTop(s) {
+  if (s == null || isNaN(s)) return '';
+  if (s < 1)  return Math.round(s * 1000) + ' ms';
+  if (s < 60) return (+s.toPrecision(3)) + ' s';
+  return Math.floor(s / 60) + 'm ' + Math.round(s % 60) + 's';
+}
+function fmtBytesTop(b) {
+  if (b == null || isNaN(b)) return '';
+  const u = ['B', 'kB', 'MB', 'GB', 'TB'];
+  const i = b <= 0 ? 0 : Math.min(u.length - 1, Math.floor(Math.log(b) / Math.log(1000)));
+  return (+(b / Math.pow(1000, i)).toPrecision(3)) + ' ' + u[i];
+}
+
+// Bars are relative to the largest in their own column, so the shape of the
+// distribution is visible rather than every row looking the same.
+function barList(rows, field, fmt) {
+  if (!rows || !rows.length) return '<p class="graph-hint">nothing recorded</p>';
+  const max = Math.max.apply(null, rows.map(r => r[field]));
+  return rows.map(function (r) {
+    const pct = max > 0 ? (r[field] / max) * 100 : 0;
+    return '<div class="bar-row">' +
+      '<div class="bar-name" data-goto-target="' + rfEsc(r.name) + '">' +
+        '<div class="bar-fill" style="width:' + pct.toFixed(1) + '%"></div>' +
+        '<span>' + rfEsc(r.name) + '</span>' +
+      '</div>' +
+      '<div class="bar-val">' + fmt(r[field]) + '</div>' +
+    '</div>';
+  }).join('');
+}
+
+function renderProfile() {
+  if (!PROFILE) return;
+  const slow = PROFILE.slowest || [], big = PROFILE.largest || [];
+  if (!slow.length && !big.length) return;
+
+  const cp = PROFILE.critical_path || [];
+  const parts = [];
+  if (PROFILE.total_seconds) {
+    parts.push('<b>' + fmtSecsTop(PROFILE.total_seconds) + '</b> of recorded build time');
+  }
+  if (cp.length) {
+    // The number that matters for optimising: no amount of parallelism beats
+    // the longest dependency chain.
+    parts.push('longest chain <b>' + fmtSecsTop(PROFILE.critical_seconds) +
+               '</b> over ' + cp.length + ' targets');
+  }
+  if (PROFILE.total_bytes) parts.push('<b>' + fmtBytesTop(PROFILE.total_bytes) + '</b> stored');
+  document.getElementById('profile-summary').innerHTML = parts.join(' &middot; ');
+  document.getElementById('profile-slowest').innerHTML = barList(slow, 'seconds', fmtSecsTop);
+  document.getElementById('profile-largest').innerHTML = barList(big, 'bytes', fmtBytesTop);
+  document.getElementById('profile').style.display = '';
+  if (cp.length > 1) document.getElementById('cp-toggle-wrap').style.display = '';
+}
+
+// ---- since the last build ------------------------------------------------
+// Every docs build used to overwrite the previous figures, so "what actually
+// rebuilt?" had no answer. history.json keeps a snapshot per build.
+
+function renderHistory() {
+  const d = HISTORY && HISTORY.diff;
+  if (!d) return;
+  const groups = [
+    ['Rebuilt',        d.rebuilt,        null],
+    ['Status changed', d.status_changed, null],
+    ['Added',          d.added,          null],
+    ['Removed',        d.removed,        null],
+    ['Slower',         d.slower,         null],
+    ['Faster',         d.faster,         null],
+    ['Grew',           d.grew,           null],
+    ['Shrank',         d.shrank,         null]
+  ].filter(g => g[1] && g[1].length);
+
+  if (!groups.length) return;
+  document.getElementById('since-when').textContent =
+    'Comparing ' + d.to + ' with ' + d.from + '.';
+  document.getElementById('since-body').innerHTML = groups.map(function (g) {
+    return '<h3>' + g[0] + '</h3><ul>' +
+      g[1].map(x => '<li><code>' + rfEsc(x) + '</code></li>').join('') + '</ul>';
+  }).join('');
+  document.getElementById('since-last').style.display = '';
+}
 
 // ---- pipeline overview: React Flow ---------------------------------------
 // GRAPH carries positions computed by dag_layout() in R, because React Flow
@@ -260,10 +422,12 @@ function rfOpen(id) {
   if (n.repository && n.repository !== 'local') kv.push(['Repository', n.repository]);
   if (n.iteration && n.iteration !== 'vector')  kv.push(['Iteration', n.iteration]);
   if (n.last_built) kv.push(['Last built', n.last_built]);
+  if (n.progress)   kv.push(['Last run', n.progress]);
   const secs = fmtSecs(n.seconds); if (secs) kv.push(['Runtime', secs]);
   const size = fmtBytes(n.bytes);  if (size) kv.push(['Size', size]);
 
-  const tags = ['<span class="tag ' + rfEsc(n.status) + '">' + rfEsc(n.status) + '</span>'];
+  const tags = ['<span class="tag ' + rfEsc(n.status) + '">' +
+                rfEsc(n.status_label || n.status) + '</span>'];
   if (n.branched) {
     tags.push('<span class="tag branched">' +
       (n.n_branches ? n.n_branches + ' branches' : 'branched') + '</span>');
@@ -333,7 +497,7 @@ function renderLocalGraph(host, centre) {
       data: { label: rce('div', { className: cls },
         rce('div', { className: 'nm' }, n.label),
         rce('div', { className: 'st' },
-            n.kind === 'function' ? 'function' : n.status)) },
+            n.kind === 'function' ? 'function' : (n.status_label || n.status))) },
       sourcePosition: RFC.Position.Right,
       targetPosition: RFC.Position.Left,
       style: { background: 'transparent', border: 'none', padding: 0, width: 'auto' }
@@ -379,7 +543,7 @@ function renderOverview(showFunctions) {
   const rfNodes = visible.map(function (n) {
     const kids = [rce('div', { className: 'nm' }, n.label),
                   rce('div', { className: 'st' },
-                      n.kind === 'function' ? 'function' : n.status)];
+                      n.kind === 'function' ? 'function' : (n.status_label || n.status))];
     if (n.branched) {
       kids.push(rce('div', { className: 'br' },
         n.n_branches ? n.n_branches + ' branches' : 'branched'));
@@ -387,6 +551,7 @@ function renderOverview(showFunctions) {
     return {
       id: n.id,
       position: { x: n.x, y: n.y },
+      className: n.on_critical_path ? 'cp' : '',
       data: { label: rce.apply(null,
         ['div', { className: 'tnode ' + n.status + ' ' + (n.kind || 'stem') }].concat(kids)) },
       sourcePosition: RFC.Position.Right,
@@ -402,14 +567,25 @@ function renderOverview(showFunctions) {
                markerEnd: { type: RFC.MarkerType.ArrowClosed, color: '#a6adc8' } };
     });
 
+  paintFlow(rfNodes, rfEdges, function (_ev, node) { rfOpen(node.id); },
+            'flat:' + (showFunctions ? 'fn' : 'nofn'));
+}
+
+// Shared by the flat, grouped and drilled-in views.
+//
+// `key` matters: React Flow only honours fitView on mount, so without a key
+// change switching views keeps the previous pan and zoom and the new graph
+// lands off screen.
+function paintFlow(rfNodes, rfEdges, onNodeClick, viewKey) {
   const RFlow = RFC.ReactFlow || RFC.default;
   if (!rfRoot) rfRoot = ReactDOM.createRoot(document.getElementById('rf-graph'));
   rfRoot.render(
     rce(RFlow, {
+      key: viewKey || 'flat',
       nodes: rfNodes, edges: rfEdges,
       fitView: true, fitViewOptions: { padding: 0.15 }, minZoom: 0.1,
       nodesDraggable: true,
-      onNodeClick: function (_ev, node) { rfOpen(node.id); },
+      onNodeClick: onNodeClick,
       onPaneClick: rfClose
     },
       rce(RFC.Background, { color: '#313244', gap: 16 }),
@@ -419,6 +595,91 @@ function renderOverview(showFunctions) {
         nodeColor: function () { return '#45475a'; } })
     )
   );
+}
+
+// ---- grouped overview ----------------------------------------------------
+//
+// At 400 targets the layered graph is a line nobody can read. The groups come
+// from target_groups() in R, which tries the declaring file, then the file
+// defining the functions a target calls, then a name prefix, then depth
+// bands, and rejects the lot when none scores well -- so this toggle only
+// appears when there is a grouping worth offering. It stays off by default:
+// the flat graph is still what most pipelines want.
+//
+// Drilling into a group re-uses a layout computed in R rather than running a
+// layout in the browser, so there is one implementation of it, not two.
+
+let groupDrill = null;
+
+function groupNodeEl(g) {
+  const kids = [rce('div', { className: 'nm' }, g.label),
+                rce('div', { className: 'ct' },
+                    g.n_targets + (g.n_targets === 1 ? ' target' : ' targets'))];
+  if (g.n_errored)  kids.push(rce('div', { className: 'ct err' }, g.n_errored + ' errored'));
+  else if (g.n_outdated) kids.push(rce('div', { className: 'ct warn' }, g.n_outdated + ' outdated'));
+  return rce.apply(null, ['div', { className: 'tnode group ' + g.status }].concat(kids));
+}
+
+function renderGrouped() {
+  const G = GRAPH.groups;
+  const rfNodes = G.nodes.map(function (g) {
+    return {
+      id: g.id, position: { x: g.x, y: g.y },
+      data: { label: groupNodeEl(g) },
+      sourcePosition: RFC.Position.Right, targetPosition: RFC.Position.Left,
+      style: { background: 'transparent', border: 'none', padding: 0, width: 'auto' }
+    };
+  });
+  const rfEdges = G.edges.map(function (d) {
+    return { id: d.id, source: d.source, target: d.target,
+             style: { stroke: '#a6adc8', strokeWidth: 2 },
+             markerEnd: { type: RFC.MarkerType.ArrowClosed, color: '#a6adc8' } };
+  });
+  paintFlow(rfNodes, rfEdges, function (_ev, node) { drillInto(node.id); },
+            'groups');
+  crumb(null);
+}
+
+function drillInto(label) {
+  const G = GRAPH.groups;
+  const place = {};
+  (G.layout[label] || []).forEach(function (p) { place[p.id] = p; });
+  const members = GRAPH.nodes.filter(n => place[n.id]);
+  if (!members.length) return;
+  groupDrill = label;
+
+  const rfNodes = members.map(function (n) {
+    return {
+      id: n.id, position: { x: place[n.id].x, y: place[n.id].y },
+      className: n.on_critical_path ? 'cp' : '',
+      data: { label: rce.apply(null, ['div',
+        { className: 'tnode ' + n.status + ' ' + (n.kind || 'stem') },
+        rce('div', { className: 'nm' }, n.label),
+        rce('div', { className: 'st' }, n.status_label || n.status)]) },
+      sourcePosition: RFC.Position.Right, targetPosition: RFC.Position.Left,
+      style: { background: 'transparent', border: 'none', padding: 0, width: 'auto' }
+    };
+  });
+  const ids = {}; members.forEach(n => { ids[n.id] = 1; });
+  const rfEdges = (GRAPH.edges || [])
+    .filter(d => ids[d.source] && ids[d.target])
+    .map(function (d) {
+      return { id: d.id, source: d.source, target: d.target,
+               style: { stroke: '#a6adc8', strokeWidth: 1.5 },
+               markerEnd: { type: RFC.MarkerType.ArrowClosed, color: '#a6adc8' } };
+    });
+  paintFlow(rfNodes, rfEdges, function (_ev, node) { rfOpen(node.id); },
+            'drill:' + label);
+  crumb(label, members.length);
+}
+
+function crumb(label, n) {
+  const el = document.getElementById('grp-crumb');
+  if (!label) { el.style.display = 'none'; el.innerHTML = ''; groupDrill = null; return; }
+  el.style.display = '';
+  el.innerHTML = '<b>' + rfEsc(label) + '</b> &middot; ' + n + ' targets' +
+                 '<button id="grp-back">back to groups</button>';
+  document.getElementById('grp-back').onclick = function () { rfClose(); renderGrouped(); };
 }
 
 if (GRAPH.nodes && GRAPH.nodes.length) {
@@ -433,6 +694,39 @@ if (GRAPH.nodes && GRAPH.nodes.length) {
       renderOverview(fnBox.checked);
     });
   }
+
+  // Highlighting is a class on the container: toggling it does not re-render
+  // the graph, so pan and zoom survive.
+  const cpBox = document.getElementById('show-critical');
+  cpBox.addEventListener('change', function () {
+    document.getElementById('rf-graph').classList.toggle('cp-on', cpBox.checked);
+  });
+
+  // Only offered when R found a grouping worth offering.
+  if (GRAPH.groups && GRAPH.groups.nodes && GRAPH.groups.nodes.length > 1) {
+    const wrap = document.getElementById('grp-toggle-wrap');
+    wrap.style.display = '';
+    wrap.title = 'Grouped by ' + (GRAPH.grouping_method || 'structure');
+    const grpBox = document.getElementById('show-groups');
+    grpBox.addEventListener('change', function () {
+      rfClose();
+      // Functions have no group, so the two toggles are mutually exclusive.
+      fnBox.disabled = grpBox.checked;
+      if (grpBox.checked) renderGrouped();
+      else { crumb(null); renderOverview(fnBox.checked); }
+    });
+  }
+
+  renderProfile();
+  renderHistory();
+
+  // A bar in the profile is a link to the target it names.
+  document.addEventListener('click', function (ev) {
+    const el = ev.target.closest && ev.target.closest('[data-goto-target]');
+    if (!el) return;
+    showTab('targets');
+    loadPage('targets', el.getAttribute('data-goto-target'));
+  });
 } else {
   document.getElementById('rf-stage').innerHTML =
     '<p style="color:#6c7086;font-style:italic;padding:20px">No targets to graph.</p>';
@@ -448,39 +742,146 @@ function showTab(tab) {
     el.classList.toggle('active', (i === 0 && tab === 'targets') ||
                                    (i === 1 && tab === 'functions'));
   });
-  renderNavList(null, tab);
+  renderNav();
 }
 
-function renderNavList(filter, tab) {
-  const list  = document.getElementById('nav-list');
-  list.innerHTML = '';
-  const items = tab === 'targets' ? targets : functions;
-  const shown = filter
-    ? items.filter(i =>
-        i.name.toLowerCase().includes(filter.toLowerCase()) ||
-        (i.description || '').toLowerCase().includes(filter.toLowerCase()))
-    : items;
+// ---- sidebar -------------------------------------------------------------
+//
+// A flat list does not survive scale. On a 420-target pipeline it was 12,600px
+// of undifferentiated scroll -- a 900px viewport showed 7% of it -- and
+// loadPage() rebuilt all 420 nodes on every click just to move the .active
+// class. So: group, cap, and let search reach the rest.
+//
+// The groups are chosen so the default view answers a question. Errored and
+// outdated targets are listed in full because they are the reason you opened
+// the page; the healthy majority is capped, because the first 40 of 400
+// alphabetically is not information.
 
-  if (shown.length === 0) {
-    list.innerHTML = '<div class="no-content">No results</div>';
-    return;
+const NAV_CAP = 40;
+let navExpanded = { targets: false, functions: false };
+
+function navGroups(tab) {
+  if (tab === 'functions') {
+    // Functions group by the file that defines them -- the structure their
+    // author already chose. Falls back to one group when unknown.
+    const byFile = {};
+    functions.forEach(function (f) {
+      const k = f.source_file || 'R';
+      (byFile[k] = byFile[k] || []).push(f);
+    });
+    return Object.keys(byFile).sort().map(k => ({ label: k, items: byFile[k], always: false }));
   }
-  shown.forEach(item => {
-    const div = document.createElement('div');
-    div.className = 'nav-item' +
-      (currentKey === tab + ':' + item.name ? ' active' : '');
-    if (tab === 'targets') {
-      const cls = item.status === 'uptodate'  ? 'badge-ok'  :
-                  item.status === 'errored'    ? 'badge-err' : 'badge-na';
-      div.innerHTML = item.name +
-        '<span class="badge ' + cls + '">' + (item.status || '?') + '</span>';
-    } else {
-      div.textContent = item.name;
+  const of = st => targets.filter(t => t.status === st);
+  return [
+    { label: 'Errored',    items: of('errored'),  always: true  },
+    { label: 'Outdated',   items: of('outdated'), always: true  },
+    { label: 'Not built',  items: of('unbuilt'),  always: true  },
+    { label: 'Up to date', items: of('uptodate'), always: false }
+  ].filter(g => g.items.length);
+}
+
+function navItemHtml(item, tab) {
+  const key = tab + ':' + item.name;
+  if (tab === 'functions') {
+    return '<div class="nav-item" data-key="' + rfEsc(key) + '">' +
+           rfEsc(item.name) + '</div>';
+  }
+  const cls = item.status === 'uptodate' ? 'badge-ok'   :
+              item.status === 'errored'  ? 'badge-err'  :
+              item.status === 'outdated' ? 'badge-warn' : 'badge-na';
+  return '<div class="nav-item" data-key="' + rfEsc(key) + '">' +
+         rfEsc(item.name) + '<span class="badge ' + cls + '">' +
+         rfEsc(item.status_label || item.status || '?') + '</span></div>';
+}
+
+function renderNavList(tab) {
+  const list = document.getElementById('nav-list');
+  const groups = navGroups(tab);
+  const total = groups.reduce((n, g) => n + g.items.length, 0);
+
+  if (!total) { list.innerHTML = '<div class="no-content">Nothing here</div>'; return; }
+
+  // Groups that always show (errored, outdated) are never truncated; the
+  // remaining budget is what the rest share.
+  const expanded = navExpanded[tab];
+  let budget = expanded ? Infinity
+             : Math.max(NAV_CAP - groups.filter(g => g.always)
+                                        .reduce((n, g) => n + g.items.length, 0), 10);
+
+  let html = '', shown = 0;
+  groups.forEach(function (g) {
+    const take = g.always ? g.items.length : Math.min(g.items.length, budget);
+    if (!g.always) budget -= take;
+    if (take <= 0) return;
+    shown += take;
+    // A single group covering everything is not worth a header.
+    if (groups.length > 1) {
+      html += '<div class="nav-group">' + rfEsc(g.label) +
+              '<span>' + g.items.length + '</span></div>';
     }
-    div.onclick = () => loadPage(tab, item.name);
-    list.appendChild(div);
+    html += g.items.slice(0, take).map(i => navItemHtml(i, tab)).join('');
+  });
+
+  if (shown < total) {
+    html += '<div class="nav-more" data-expand="' + tab + '">' +
+            'Showing ' + shown + ' of ' + total + ' &middot; <b>show all</b>' +
+            '<div class="nav-more-hint">or search to narrow</div></div>';
+  } else if (expanded && total > NAV_CAP) {
+    html += '<div class="nav-more" data-collapse="' + tab + '">' +
+            'Showing all ' + total + ' &middot; <b>show fewer</b></div>';
+  }
+
+  list.innerHTML = html;
+  markActive();
+}
+
+// Attribute selectors need quoting; target names are R symbols, but a pattern
+// name can carry characters a bare selector would choke on.
+function cssEscape(v) { return String(v).replace(/["\\]/g, '\\$&'); }
+
+// Moving the highlight used to re-render the entire list: 41ms per click on
+// 420 targets, for one class change. It is now a class swap, plus one pin.
+function markActive() {
+  const list = document.getElementById('nav-list');
+  // Navigating to something the cap hides left the sidebar with no indication
+  // of where you were. Pin it at the top so there is always an anchor.
+  const pinned = list.querySelector('.nav-pin');
+  if (pinned) pinned.remove();
+  const stale = list.querySelector('.nav-pin-head');
+  if (stale) stale.remove();
+
+  if (currentKey && !list.querySelector('[data-key="' + cssEscape(currentKey) + '"]')) {
+    const at   = currentKey.indexOf(':');
+    const tab  = currentKey.slice(0, at);
+    const nm   = currentKey.slice(at + 1);
+    const item = (tab === 'targets' ? targets : functions).find(x => x.name === nm);
+    if (item) {
+      list.insertAdjacentHTML('afterbegin',
+        '<div class="nav-group nav-pin-head">Current<span>1</span></div>' +
+        navItemHtml(item, tab).replace('class="nav-item"', 'class="nav-item nav-pin"'));
+    }
+  }
+
+  list.querySelectorAll('.nav-item, .search-result').forEach(function (el) {
+    el.classList.toggle('active', el.getAttribute('data-key') === currentKey);
   });
 }
+
+// One delegated listener rather than a closure per item.
+document.getElementById('nav-list').addEventListener('click', function (ev) {
+  const more = ev.target.closest('[data-expand], [data-collapse]');
+  if (more) {
+    const tab = more.getAttribute('data-expand') || more.getAttribute('data-collapse');
+    navExpanded[tab] = more.hasAttribute('data-expand');
+    renderNavList(tab);
+    return;
+  }
+  const row = ev.target.closest('[data-key]');
+  if (!row) return;
+  const key = row.getAttribute('data-key');
+  const at  = key.indexOf(':');
+  loadPage(key.slice(0, at), key.slice(at + 1));
+});
 
 function loadPage(type, name) {
   const key  = type + ':' + name;
@@ -491,7 +892,7 @@ function loadPage(type, name) {
   if (location.hash.slice(1) !== key) {
     history.replaceState(null, '', '#' + key);
   }
-  renderNavList(document.getElementById('search-box').value, currentTab);
+  markActive();
 
   document.getElementById('home-panel').style.display   = 'none';
   document.getElementById('page-content').style.display = '';
@@ -546,7 +947,7 @@ function goHome() {
   document.getElementById('home-panel').style.display   = '';
   document.getElementById('page-content').style.display = 'none';
   currentKey = null;
-  renderNavList(null, currentTab);
+  renderNav();
 }
 
 // Pan/zoom state
@@ -567,36 +968,67 @@ window.addEventListener('hashchange', openFromHash);
 
 // Fuse.js search
 const fuse = new Fuse([...targets, ...functions], {
-  keys: ['name', 'description', 'command'],
-  threshold: 0.35,
+  // ignoreLocation matters here: without it Fuse only scores matches near the
+  // start of a field, so a name like "clean_station_readings" would not match
+  // "station". The threshold is tighter than the default because at 400+
+  // targets a loose one fills the list with near-misses -- "eval_01" matched
+  // a hundred rows before.
+  keys: [{ name: 'name', weight: 3 }, 'description', 'command'],
+  threshold: 0.3,
+  ignoreLocation: true,
+  minMatchCharLength: 2,
   includeScore: true
 });
 
-document.getElementById('search-box').addEventListener('input', function() {
-  const q = this.value.trim();
-  if (!q) { renderNavList(null, currentTab); return; }
-  const results = fuse.search(q).slice(0, 30);
+// There used to be two searches. Typing ran Fuse and wrote results straight
+// into the list; renderNavList() did its own substring filter. Clicking a
+// result called loadPage(), which re-rendered with the substring one -- so on
+// the large pipeline, searching "eval" showed 30 ranked matches and clicking
+// one silently replaced them with 70 different rows. Now there is one path.
+
+const SEARCH_CAP = 60;
+
+function renderSearch(q) {
   const list = document.getElementById('nav-list');
-  list.innerHTML = '';
-  if (results.length === 0) {
-    list.innerHTML = '<div class="no-content">No results</div>';
+  const all  = fuse.search(q);
+  if (!all.length) {
+    list.innerHTML = '<div class="no-content">No matches for &ldquo;' +
+                     rfEsc(q) + '&rdquo;</div>';
     return;
   }
-  results.forEach(r => {
-    const item = r.item;
-    const div  = document.createElement('div');
-    div.className = 'search-result' +
-      (currentKey === item.type + ':' + item.name ? ' active' : '');
-    div.innerHTML =
-      '<div class="search-result-name">' + item.name +
-      '<span class="item-type">' + item.type + '</span></div>' +
-      '<div class="search-result-desc">' + (item.description || '') + '</div>';
-    div.onclick = () => loadPage(item.type, item.name);
-    list.appendChild(div);
-  });
-});
+  const shown = all.slice(0, SEARCH_CAP);
+  list.innerHTML =
+    '<div class="nav-group">Matches<span>' +
+      (all.length > shown.length ? shown.length + ' of ' + all.length : all.length) +
+    '</span></div>' +
+    shown.map(function (r) {
+      const it = r.item;
+      return '<div class="search-result" data-key="' +
+               rfEsc(it.type + ':' + it.name) + '">' +
+             '<div class="search-result-name">' + rfEsc(it.name) +
+               '<span class="item-type">' + rfEsc(it.type) + '</span></div>' +
+             (it.description
+               ? '<div class="search-result-desc">' + rfEsc(it.description) + '</div>'
+               : '') +
+             '</div>';
+    }).join('') +
+    (all.length > shown.length
+      ? '<div class="nav-more"><div class="nav-more-hint">' +
+        (all.length - shown.length) + ' more &middot; keep typing to narrow</div></div>'
+      : '');
+  markActive();
+}
 
-renderNavList(null, 'targets');
+// Search spans both tabs deliberately: on a large pipeline you rarely know
+// whether what you are after is a target or the function behind it.
+function renderNav() {
+  const q = document.getElementById('search-box').value.trim();
+  if (q) renderSearch(q); else renderNavList(currentTab);
+}
+
+document.getElementById('search-box').addEventListener('input', renderNav);
+
+renderNavList('targets');
 
 // A deep link wins over the default home view.
 openFromHash();

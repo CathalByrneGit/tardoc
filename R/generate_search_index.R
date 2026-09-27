@@ -16,14 +16,15 @@
 generate_search_index <- function(targets_data, function_names, cfg) {
   target_entries <- lapply(targets_data$target_names, function(target_name) {
     manifest_row <- dplyr::filter(targets_data$manifest, .data$name == target_name)
-    meta_row     <- dplyr::filter(targets_data$meta,     .data$name == target_name)
     dep          <- get_target_network_dependencies(
       target_name, targets_data$network, max_depth_up = 1, max_depth_down = 1
     )
 
     description <- .pull_description(manifest_row)
     command     <- dplyr::pull(manifest_row, "command")
-    status      <- if (is.na(meta_row$error)) "uptodate" else "errored"
+    status      <- .target_status(target_name, targets_data$meta,
+                                 targets_data$outdated,
+                                 isTRUE(targets_data$has_store))
 
     list(
       type        = "target",
@@ -33,6 +34,8 @@ generate_search_index <- function(targets_data, function_names, cfg) {
       upstream    = as.list(dep$upstream),
       downstream  = as.list(dep$downstream),
       status      = status,
+      # The badge shows the label; the class is keyed off `status`.
+      status_label = .status_label(status),
       file        = paste0("targets/", target_name, ".md")
     )
   })
@@ -72,9 +75,37 @@ generate_search_index <- function(targets_data, function_names, cfg) {
 
 .find_function_file <- function(func_name, r_files) {
   for (f in r_files) {
-    env <- new.env(parent = emptyenv())
-    tryCatch(source(f, local = env), error = function(e) NULL)
-    if (func_name %in% ls(env)) return(f)
+    if (func_name %in% .file_defines(f)) return(f)
   }
   NULL
+}
+
+#' Names of functions defined at the top level of an R file
+#'
+#' Parsed rather than sourced. The previous implementation sourced each file
+#' into `new.env(parent = emptyenv())`, which has no base functions, so
+#' `source()` failed on the first `<-` and the lookup never matched anything:
+#' every function's `source_file` and `description` in the search index was
+#' empty. Parsing also avoids executing a user's top-level code just to find
+#' out where a function lives.
+#'
+#' @param path Path to an R file.
+#' @return A character vector of function names, possibly empty.
+#' @keywords internal
+.file_defines <- function(path) {
+  exprs <- tryCatch(parse(path, keep.source = FALSE),
+                    error = function(e) NULL)
+  if (is.null(exprs)) return(character())
+
+  out <- character()
+  for (e in exprs) {
+    if (!is.call(e) || length(e) < 3) next
+    op <- as.character(e[[1]])
+    if (!op %in% c("<-", "=", "<<-")) next
+    value <- e[[3]]
+    is_fn <- is.call(value) &&
+      as.character(value[[1]])[1] %in% c("function", "\\")
+    if (is_fn && is.name(e[[2]])) out <- c(out, as.character(e[[2]]))
+  }
+  out
 }
