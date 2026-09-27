@@ -14,25 +14,17 @@ generate_all_function_pages <- function(cfg) {
   func_names <- character()
 
   for (file in r_files) {
-    # Discover function names via regex -- avoids sourcing files that may have
-    # missing package dependencies in the calling environment
-    lines     <- readLines(file, warn = FALSE)
-    fn_names  <- regmatches(lines,
-                   regexpr("^([a-zA-Z_.][a-zA-Z0-9_.]*)\\s*(<-|=)\\s*function",
-                            lines, perl = TRUE))
-    fn_names  <- sub("\\s*(<-|=)\\s*function.*", "", fn_names)
+    # One parse gives both the names and their verbatim source. This used to
+    # be a regex for discovery plus a source() and deparse() for the body:
+    # the regex only matched `name <- function` at column one, and deparse
+    # showed R's reconstruction of the parsed object, which has had every
+    # comment stripped out of it. Parsing also means no user code is run.
+    defs <- .file_functions(file)
 
-    # Source into a local env for deparse(); silently skip on error
-    func_env <- new.env(parent = globalenv())
-    tryCatch(source(file, local = func_env), error = function(e) NULL)
-
-    for (func_name in fn_names) {
+    for (func_name in names(defs)) {
       message("  Function: ", func_name)
 
-      fun_obj  <- if (exists(func_name, envir = func_env, inherits = FALSE))
-          get(func_name, func_env) else NULL
-      fun_code <- if (!is.null(fun_obj)) paste(deparse(fun_obj), collapse = "\n") else
-          paste0(func_name, " <- function(...) { ... }  # source unavailable")
+      fun_code <- defs[[func_name]]$text
 
       docs_md <- suppressWarnings(get_fn_docs(func_name, file))
       if (is.null(docs_md)) docs_md <- "_No roxygen documentation found._"
