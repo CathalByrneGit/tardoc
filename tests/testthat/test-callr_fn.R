@@ -45,3 +45,34 @@ test_that("load_targets_data passes the choice to every targets call", {
     expect_match(call_txt, "callr_function", fixed = TRUE)
   }
 })
+
+test_that("documenting a project does not write _targets.yaml", {
+  # tar_config_set() writes that file in the user's project, and the store
+  # path tardoc had was absolute -- so running tardoc once left a machine
+  # path committed in their repository, breaking the project everywhere else.
+  skip_if_not_installed("targets")
+  dir <- withr::local_tempdir()
+  dir.create(file.path(dir, "R"))
+  writeLines("double_it <- function(x) x * 2", file.path(dir, "R", "f.R"))
+  writeLines(c("library(targets)", "tar_source('R')",
+               "list(tar_target(a, 1), tar_target(b, double_it(a)))"),
+             file.path(dir, "_targets.R"))
+
+  cfg <- build_site_config(dir)
+  setup_site_dirs(cfg)
+  suppressMessages(load_targets_data(cfg, check_outdated = FALSE))
+
+  expect_false(file.exists(file.path(dir, "_targets.yaml")))
+})
+
+test_that("the store is passed per call rather than set globally", {
+  src <- paste(deparse(body(load_targets_data)), collapse = "\n")
+  expect_false(grepl("tar_config_set", src, fixed = TRUE))
+  # Matching to the closing paren is not safe -- tar_meta()'s arguments
+  # contain their own -- so look at a window after each call name.
+  for (fn in c("tar_network", "tar_meta", "tar_progress", "tar_outdated")) {
+    window <- regmatches(src, regexpr(paste0(fn, "\\(.{0,110}"), src))
+    expect_true(length(window) == 1L, info = fn)
+    expect_match(window, "store = store", fixed = TRUE)
+  }
+})

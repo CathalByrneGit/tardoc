@@ -1,140 +1,175 @@
-# Can targets run in webR, and what would that mean for tardoc?
+# Publishing a whole targets project to the browser
 
-Yes to the first, and the second is more interesting than expected: **the entire
-of `document_targets()` already runs in a browser**, and making it do so took a
-one-function change.
+A reader opens a URL and gets the pipeline itself: the built store, the values,
+the code, the docs — and can change the code and re-run it, with correct
+incremental rebuild. No R, no Docker, no server.
 
-Everything below was executed in headless Chromium against webR 0.6.0 (R 4.6.0),
-not inferred from documentation.
+**It works.** Everything below was executed in headless Chromium against webR
+0.6.0 (R 4.6.0), not inferred from documentation.
 
 ---
 
-## Is targets available?
+## Does targets run under webR?
 
-`repo.r-wasm.org` serves 22,741 wasm binaries for R 4.6, and `targets` 1.12.0 is
-one of them. So is every package tardoc needs:
+`repo.r-wasm.org` carries `targets` 1.12.0 for R 4.6 and every package tardoc
+imports — a 48-package closure with nothing missing. Installing it takes about
+four seconds in the browser.
 
-| Closure | Packages | Missing |
-|---|---:|---|
-| `targets` alone | 33 | none |
-| tardoc's Imports + targets | **48** | none |
-| \+ tier 3/4 Suggests (duckdb, httpuv, ellmer) | 192 | `curl`, `mnormt` |
-
-Tiers 3 and 4 are moot anyway — `httpuv` and `curl` want sockets, which wasm
-does not have — but tier 1, the part that matters, is fully installable.
-
-## Does it work?
-
-Installing `targets` and its 33 dependencies took **3.6 seconds**. Then, in the
-browser, against a two-target pipeline written to webR's virtual filesystem:
+One thing stopped it, and the same thing every time. `targets` reads
+`_targets.R` in a subprocess by default, which keeps the pipeline's environment
+out of the caller's session. wasm cannot spawn processes, so `callr` looks for
+`R.home("bin")/R`, finds nothing, and fails:
 
 | Call | Default | `callr_function = NULL` |
 |---|---|---|
-| `tar_manifest()` | ✗ `Cannot find R executable at /usr/lib/R/bin/R` | ✓ `seed, doubled` |
-| `tar_network()` | ✗ same | ✓ 3 vertices, 2 edges |
-| `tar_outdated()` | ✗ same | ✓ 2 outdated |
-| `tar_make()` | ✗ same | ✓ built, `doubled = 42` |
-| `tar_meta()` | ✓ | — |
-| `tar_progress()` | ✓ | — |
-
-One cause for every failure. `targets` reads `_targets.R` in a subprocess by
-default, which keeps the pipeline's environment out of the caller's session.
-wasm cannot spawn processes, so `callr` looks for `R.home("bin")/R`, finds
-nothing, and stops. Passing `callr_function = NULL` tells `targets` to read the
-pipeline in the current session instead, and everything works.
+| `tar_manifest()` | ✗ `Cannot find R executable` | ✓ |
+| `tar_network()` | ✗ | ✓ |
+| `tar_outdated()` | ✗ | ✓ |
+| `tar_make()` | ✗ | ✓ |
+| `tar_meta()`, `tar_progress()` | ✓ | — |
 
 Nothing else about `targets` needed changing. The virtual filesystem, the store,
-`qs` serialisation and the metadata all behave.
+serialisation and the metadata all behave.
 
-## What it took in tardoc
+## Can you ship a built project?
 
-One internal function, `.callr_fn()`, and three call sites in
-`load_targets_data()`.
-
-The check is deliberately for the *capability*, not the platform:
-
-```r
-any(file.exists(file.path(R.home("bin"), c("R", "R.exe"))))
-```
-
-That is exactly what `callr` itself looks for — `FALSE` under webR, `TRUE` on
-this machine — so any environment without a spawnable R gets the in-process
-reader without tardoc having to know its name. Detecting `R.version$os ==
-"emscripten"` would have worked too and would have been wrong: it hard-codes one
-answer to a question that is really about whether a subprocess can start.
-
-## The whole thing runs
-
-With that change, `document_targets()` completes in the browser:
+Yes — and the bundle is nothing. The example pipeline, source and built store
+together, is **26 KB gzipped**. Untarred into webR's filesystem:
 
 ```
-install tardoc + closure   5.2s
-library(tardoc)            ok 0.6.0
-load_targets_data          2 targets
-generate target pages      2 pages
-generate fn pages          double_it
-search index               ok
-build_dag_graph            7 nodes
-pipeline_profile           critical: seed->doubled
-generate_viewer            56 KB
-comments survived?         TRUE
-document_targets()         9 files written
-outdated detected          0 outdated
+files unpacked                14
+tar_read(station_summary)     6 rows, 2 cols
+tar_read(clean)               station, temp_c, day_of_year
+tar_outdated()                none - store is current
+tar_meta() rows               13
+tar_make() no-op              7 skipped
 ```
 
-`tar_make()` ran in the browser first, so this is documentation of a pipeline
-that was *built* in the browser, with real metadata behind it.
+So a visitor arrives at a pipeline that is *already built*, and can read any
+target's value.
 
-"comments survived" is the srcref source extraction working under wasm — worth
-checking, because it is the one part of tardoc that depends on how R parses
-files rather than on any package.
+## Is it live?
 
-## What it would cost
+That is the part that matters, and yes. Editing a threshold in `R/functions.R`
+from inside the browser:
 
-Measured from the network, cold:
+```
+before: clean rows            400
+now outdated                  report, clean, station_summary, drift_model, drift_flags
+rebuild                       5 completed, 2 skipped
+after: clean rows             326
+now outdated again?           none - rebuilt and current
+```
+
+`targets` invalidated exactly the five downstream targets, left the two upstream
+ones alone, re-ran, and settled. Then `document_targets()` regenerated the docs
+on top of the new state — 9 files, a 77 KB viewer.
+
+This is not a demo of R in a browser. It is a targets pipeline behaving like a
+targets pipeline, published as static files.
+
+## GitHub Pages can host it
+
+The obvious worry: webR wants `SharedArrayBuffer`, which needs
+`Cross-Origin-Opener-Policy` and `Cross-Origin-Embedder-Policy` headers, and
+**GitHub Pages cannot set headers**.
+
+Tested on a server sending neither:
+
+```
+crossOriginIsolated: false
+SharedArrayBuffer  : undefined
+```
+
+Everything above still ran — the shipped store, the edit, the rebuild, the docs.
+webR 0.6's PostMessage channel covers this case. Cross-origin isolation makes it
+faster; it is not required.
+
+## What it costs
 
 | | |
 |---|---:|
-| R packages (49) | 31.4 MB |
-| `R.wasm` | 17.2 MB |
-| BLAS / LAPACK | 1.9 MB |
-| webR JavaScript | 0.9 MB |
-| **Total** | **51.5 MB** |
+| The project bundle | **26 KB** |
+| `R.wasm` + BLAS/LAPACK + webR JS | 20.0 MB |
+| R packages for tardoc's stack (49) | 31.4 MB |
+| **Total, cold** | **51.5 MB** |
 
-For comparison, the current tier 1 viewer loads about 300 KB of CDN libraries
-and a self-contained HTML file. So a browser-native tardoc is **two orders of
-magnitude** more download than the thing it would be generating.
+The publisher hosts the 26 KB and one HTML file. The 51.5 MB comes from
+r-wasm's CDN on demand and caches, so hosting is free and the repository stays
+small.
 
-That number decides the shape of any product built on this. It is absurd for
-"open some docs". It is entirely reasonable for "paste a `_targets.R` and get
-docs without installing R", where the alternative is installing R.
+A pipeline's own packages add to it. Measured against the same index:
 
-## So what should tardoc do?
+| Pipeline stack | Packages | Available |
+|---|---:|---|
+| tardoc alone | 48 | all |
+| \+ tidyverse core (ggplot2, tidyr, readr, …) | 70 | all — about 16 MB more |
+| \+ modelling (broom, glmnet, randomForest) | 67 | all |
+| \+ `sf` | 60 | all |
+| \+ `data.table` | 48 | all |
+| \+ `arrow` | — | **`arrow` unavailable** |
+| \+ `rstan` | — | **`rstan` unavailable** |
 
-**Keep the change.** `.callr_fn()` costs nothing on the desktop, is the correct
-behaviour anywhere a subprocess cannot start, and means tardoc is not the reason
-this cannot work. 511 tests still pass unchanged.
+So a tidyverse pipeline lands around 68 MB, and the practical rule is that most
+pipelines work while heavyweight compiled ones do not.
 
-**Do not build a webR viewer.** 51.5 MB to document a pipeline whose docs are
-300 KB is the wrong trade for the current product, and tiers 3 and 4 cannot
-follow regardless.
+## Judging it
 
-**Where it would genuinely pay** is a different product from the one that
-exists: a "try tardoc without installing R" page, where the visitor pastes or
-uploads a `_targets.R` and gets the viewer back. There the 51.5 MB replaces an R
-installation rather than a 300 KB file, and the trade inverts. Worth doing only
-if lowering the trial barrier is a goal — it is a demo, not a feature.
+The right comparison is not tardoc's 300 KB viewer — it is the other ways to
+hand someone a runnable pipeline. Binder needs a server and cold-starts in
+minutes. Docker needs Docker. "Install R and these fourteen packages" needs R.
+Against those, 51.5 MB of cached static files with no server is a good trade,
+and the 26 KB bundle means the project itself costs nothing to publish.
 
-One more consequence worth recording: because this works, **CI has an option it
-did not have**. A docs build needs no R installation at all — a Node script with
-webR can generate `tardoc/` from a repository. Slower than `r-lib/actions`, and
-probably never worth it, but it means the Pages workflow is not the only way.
+It is a bad trade only if all the reader wanted was the docs, which the existing
+viewer already delivers for 300 KB. These are two products, not one, and the
+existing one should not grow 51.5 MB to become the other.
+
+## The bug this found
+
+Worth recording on its own, because it affects every tardoc user and nothing to
+do with webR.
+
+`load_targets_data()` called `targets::tar_config_set(store = cfg$targets_store)`.
+`cfg$targets_store` is absolute, and `tar_config_set()` writes `_targets.yaml`
+**in the user's project**. So running tardoc once left a line like
+
+```yaml
+main:
+  store: /home/someone/analysis/_targets
+```
+
+committed in their repository — breaking the project on every other machine, in
+CI, and under webR, where it is what made `tar_read()` fail on a shipped store.
+Reproduced on the desktop against a project that had no `_targets.yaml` before.
+
+It was gratuitous as well as harmful: everything in `load_targets_data()` already
+runs inside the project directory via `withr::with_dir()`, where the default
+relative `_targets` is what `targets` would have used anyway. The store is now
+passed per call — `tar_network()`, `tar_meta()`, `tar_progress()` and
+`tar_outdated()` all take `store`; `tar_manifest()` needs none, reading
+`_targets.R` alone — and no `_targets.yaml` is written.
+
+## What tardoc should do
+
+**Keep both changes.** `.callr_fn()` and the store fix cost nothing on the
+desktop, and the second is a bug fix regardless of any of this.
+
+**A publishing command is worth building, as its own thing.** Something like
+`publish_webr()` writing a directory of static files: an HTML page that boots
+webR, the project tarball, and the viewer. Not a change to
+`document_targets()` — the existing tiers stay as they are.
+
+**Two things to settle before building it**, neither answered here: what the
+page should look like when webR is still loading twenty seconds in, and whether
+the reader gets an editor or only a re-run button. The second is a product
+question, not a technical one — everything needed for either already works.
 
 ## Reproducing
 
-The container blocks browser egress, so webR and the 49 packages were vendored
-locally and served from a cross-origin-isolated static server (webR needs
-`Cross-Origin-Opener-Policy: same-origin` and
-`Cross-Origin-Embedder-Policy: require-corp` for `SharedArrayBuffer`). tardoc
-itself is pure R, so it installs into webR as a binary simply by tarring an
-`R CMD INSTALL` tree — no compilation involved.
+The container blocks browser egress, so webR and the packages were vendored and
+served locally. tardoc is pure R, so it installs into webR as a binary by
+tarring an `R CMD INSTALL` tree — no compilation. Two gotchas cost time and are
+worth knowing: `untar()` shells out by default and `system()` is unsupported
+under Emscripten, so `tar = "internal"` is required; and webR's browser entry
+point is `dist/webr.js`, not `dist/webr.mjs`, which imports Node built-ins.

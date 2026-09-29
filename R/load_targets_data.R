@@ -34,7 +34,14 @@ load_targets_data <- function(cfg, check_outdated = TRUE) {
   # All targets:: calls must run from the project directory so they find
   # _targets.R and the store, regardless of the caller's working directory.
   withr::with_dir(cfg$project_path, {
-    targets::tar_config_set(store = cfg$targets_store)
+    # The store is passed per call rather than set globally. tar_config_set()
+    # writes _targets.yaml in the user's project, and cfg$targets_store is an
+    # absolute path, so documenting a pipeline used to leave a machine path
+    # committed in their repository -- breaking the project on every other
+    # machine, in CI, and under webR. It was gratuitous too: everything here
+    # already runs inside the project directory, where the default relative
+    # "_targets" is what targets would have used anyway.
+    store <- cfg$targets_store
 
     # targets reads the pipeline in a subprocess by default, which isolates
     # _targets.R from the calling session. Where no subprocess can be spawned
@@ -43,9 +50,10 @@ load_targets_data <- function(cfg, check_outdated = TRUE) {
     cf <- .callr_fn()
 
     # These two only need _targets.R ---------------------------------------
+    # tar_manifest() takes no store: it reads _targets.R alone.
     manifest     <- targets::tar_manifest(callr_function = cf)
     network      <- targets::tar_network(targets_only = FALSE, reporter = "silent",
-                                         callr_function = cf)
+                                         callr_function = cf, store = store)
     target_names <- dplyr::pull(manifest, "name")
 
     # Meta needs the store -------------------------------------------------
@@ -53,8 +61,9 @@ load_targets_data <- function(cfg, check_outdated = TRUE) {
 
     progress <- NULL
     if (has_store) {
-      meta <- targets::tar_meta(fields = targets::everything())
-      progress <- tryCatch(targets::tar_progress(), error = function(e) NULL)
+      meta <- targets::tar_meta(fields = targets::everything(), store = store)
+      progress <- tryCatch(targets::tar_progress(store = store),
+                           error = function(e) NULL)
       message("Store found -- run metadata loaded.")
     } else {
       message("No store found -- status and timestamps will be unavailable.")
@@ -69,7 +78,7 @@ load_targets_data <- function(cfg, check_outdated = TRUE) {
     if (isTRUE(check_outdated)) {
       outdated <- tryCatch(
         as.character(targets::tar_outdated(reporter = "silent",
-                                           callr_function = cf)),
+                                           callr_function = cf, store = store)),
         error = function(e) {
           message("Could not determine outdated targets (", conditionMessage(e),
                   ") -- falling back to error-only status.")
