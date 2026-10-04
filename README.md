@@ -1,544 +1,80 @@
 # tardoc
 
-Auto-generate documentation for any [targets](https://docs.ropensci.org/targets/) pipeline. Point tardoc at your project and get structured markdown, a browsable HTML viewer, and — optionally — a full analytics stack with SQL queries, semantic search, and an LLM chat interface.
+<!-- badges: start -->
+[![R-CMD-check](https://github.com/CathalByrneGit/tardoc/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/CathalByrneGit/tardoc/actions/workflows/R-CMD-check.yaml)
+[![lint](https://github.com/CathalByrneGit/tardoc/actions/workflows/lint.yaml/badge.svg)](https://github.com/CathalByrneGit/tardoc/actions/workflows/lint.yaml)
+[![github-pages](https://github.com/CathalByrneGit/tardoc/actions/workflows/github-pages.yml/badge.svg)](https://cathalbyrnegit.github.io/tardoc/)
+<!-- badges: end -->
 
-![The tardoc viewer showing an interactive targets pipeline dependency graph](man/figures/viewer-overview.png)
-
-<sub>The tier 1 viewer, generated from the runnable example pipeline in [`inst/examples/station-monitoring`](inst/examples/station-monitoring). Nothing here is hand-written — every page, badge and graph comes from `_targets.R` and the roxygen comments in `R/`. See that directory's README to reproduce these screenshots.</sub>
-
----
-
-## Four tiers, one command to start
-
-```r
-tardoc::document_targets(pkg_name = "My pipeline")
-```
-
-That writes the markdown, the static viewer and the WASM viewer — tiers 1 and
-2, complete. Tiers 3 and 4 need a DuckDB database, which is **not** built here:
-`view_tardoc_db()` builds `tardoc/tardoc.duckdb` the first time you call it.
-
-| Tier | How | Server? | Extra packages | Built by |
-|---|---|---|---|---|
-| **1 — Static viewer** | `view_tardoc()` | No — `file://` | None (CDN) | `document_targets()` |
-| **2 — WASM analytics** | `view_wasm_analytics()` | No — `file://` | None (CDN) | `document_targets()` |
-| **3 — Server analytics** | `view_tardoc_db()` | Yes | duckdb, callr, httpuv | `view_tardoc_db()`, on first run |
-| **4 — LLM chat** | `view_tardoc_db(llm_chat=...)` | Yes | + ellmer | `view_tardoc_db()`, on first run |
-
-MCP (bonus): `serve_tardoc_mcp()` exposes the database to Claude Desktop and
-Claude Code. It needs the database *and* the community extensions, so it
-requires `view_tardoc_db(db_extensions = TRUE)` to have run at least once.
-
----
-
-
-
-## Tier 1 — Static viewer
+Auto-generate documentation for any [targets](https://docs.ropensci.org/targets/)
+pipeline. Point tardoc at your project and get structured markdown, a browsable
+HTML viewer, and — optionally — a full analytics stack with SQL queries, semantic
+search and an LLM chat interface.
 
 ```r
+# install.packages("remotes")
+remotes::install_github("CathalByrneGit/tardoc")
+
 tardoc::document_targets(pkg_name = "My pipeline")
 tardoc::view_tardoc()
 ```
 
-Writes `tardoc/viewer.html` — a single self-contained file that opens in any browser with no server and no R dependencies beyond what `document_targets()` already requires. All pipeline content is inlined into the file; the rendering libraries (`marked`, `fuse.js`, and React + React Flow for the graph) are loaded from jsDelivr and cdnjs at exact pinned versions with subresource integrity, so the page needs network access on first open and will be served from the browser cache afterwards.
-
-**Output structure** — everything `document_targets()` writes:
-
-```
-my_project/
-├── llms.txt
-└── tardoc/
-    ├── viewer.html              tier 1, self-contained, opens as file://
-    ├── wasm_analytics.html      tier 2, self-contained, opens as file://
-    ├── analytics.html           tier 3 shell, needs view_tardoc_db()
-    ├── search_index.json
-    ├── tardoc_analytics.json
-    ├── history.json             one snapshot per build, for the run diff
-    ├── targets/
-    │   └── clean_data.md        one .md per target
-    ├── functions/
-    │   └── clean_raw.md         one .md per function
-    └── notes/
-        ├── targets/clean_data.md    yours — never overwritten
-        └── functions/clean_raw.md
-```
-
-`tardoc.duckdb` is not in that list: `view_tardoc_db()` builds it on first run.
-
-**What the viewer includes:**
-
-- An interactive pipeline graph on the home page — drag to pan, scroll to zoom, minimap, and a **show functions** toggle that adds the functions each target calls as dashed nodes
-- Click any node to open an inspect panel: description, command, branching pattern, errors, build details, and clickable upstream / downstream neighbours
-- **A sidebar that survives scale** — targets are grouped by status, with errored and outdated listed in full and the healthy majority capped. Functions group by the file that defines them. Search reaches everything else
-
-![The sidebar grouped by status: five outdated targets listed first, then the two that are up to date](man/figures/viewer-sidebar-groups.png)
-
-<sub>The default view answers "what needs attention" rather than listing everything alphabetically. See [On large pipelines](#on-large-pipelines) for how this behaves at 420 targets.</sub>
-- Fuzzy search across targets, functions, descriptions, and commands
-- **Freshness, not just errors** — every target is classified `Up-to-date`, `Outdated`, `Errored` or `Not built`. Outdated comes from [`tar_outdated()`](https://docs.ropensci.org/targets/reference/tar_outdated.html): a target whose command, dependencies or upstream targets changed since it was built, even though it never errored
-- Per target: status, last built, what it did on the last run, branching pattern, runtime, size, errors, warnings, R command, functions called, and a local dependency graph centred on that target — the same fields the graph's inspect panel shows
-
-![The viewer after an upstream function changed: two targets up to date, five marked outdated](man/figures/viewer-outdated.png)
-
-<sub>Staleness propagates. Editing one function marked `clean` and everything downstream of it outdated, while `raw_path` and `readings` stayed current — the distinction an error-only status cannot draw.</sub>
-
-- Per function: rendered roxygen docs, and the **verbatim source** — comments, blank lines and the author's own formatting intact. The source is read from the file by srcref rather than reconstructed with `deparse()`, which discards every comment inside a function
-- Code blocks over 40 lines are clamped with a *Show all N lines* control, and every block has an **Expand** pop-out for a full-screen read. Short blocks — the median function in real R code is about a dozen lines — are left exactly as they are, because capping those would add a scrollbar to something that already fits
-- Notes panel — content from `notes/` files appears at the bottom of each page
-- **Where the time goes** — slowest and largest targets, and the **critical path**: the longest dependency chain, whose total is the floor on a full rebuild however many workers you give it. Toggle it on the graph to see which chain to optimise
-- **Since the last build** — what rebuilt, what changed status, what got meaningfully slower or larger. A snapshot per build is appended to `tardoc/history.json`
-- **Per-branch detail** — a dynamic target lists each branch with its own runtime, size and error. Failed branches are always listed, however many branches there are
-- Deep links — `viewer.html#targets:clean` opens that page directly, and selecting a page updates the hash
-
-![The critical path highlighted on the graph, with the run diff and the slowest and largest targets below](man/figures/viewer-profile.png)
-
-<sub>**critical path** dims everything off the longest dependency chain. Below it, the run diff names what rebuilt since the previous build, and the rankings show where the time and space go — every bar is a link to that target's page.</sub>
-
-**What a target page looks like:**
-
-![A target page showing status, command, functions called and a local dependency graph](man/figures/viewer-target.png)
-
-Build status and last-built timestamp come from the `_targets` store; the local graph is centred on the target you are viewing, with its immediate upstream and downstream neighbours. Functions appear with a dashed border and a `function` label, and clicking any neighbour navigates to it.
-
-**Clicking a node on the overview graph:**
-
-![The inspect panel open on a target, showing its description, command, build details and neighbours](man/figures/viewer-inspect.png)
-
-The panel shows the target's description and command, its branching `pattern` when it is a dynamic target, any error or warnings, build details (format, repository, iteration, last built, runtime, size), and its neighbours as clickable chips. **Open full page →** navigates the viewer to that target.
-
-The graph is rendered with [React Flow](https://reactflow.dev), not mermaid — see [`docs/visualisation-prototypes.md`](docs/visualisation-prototypes.md) for why, what a node exposes, and where the branching fields come from. The generated `.md` files still carry a `mermaid` fence so they render on GitHub and anywhere else markdown is read; the viewer replaces it with a live graph built from the same data.
-
-![A long function clamped, with a fade, a Show all 113 lines bar and an Expand button in the corner](man/figures/viewer-code-clamp.png)
-
-<sub>A 113-line function: clamped from 2.6 screens to 1.5, with the full text one click away and a pop-out for reading it at full width.</sub>
-
-**What a function page looks like:**
-
-![A function page showing rendered roxygen documentation above the function source](man/figures/viewer-function.png)
-
-Roxygen is rendered to HTML — title, description, arguments, return value — with the full source underneath.
-
-**Search:**
-
-![Fuzzy search results across targets and functions](man/figures/viewer-search.png)
-
-Fuse.js indexes names, descriptions and commands across both targets and functions, so a partial match on any of them finds the page.
-
-**Notes:**
-
-Stub files are created under `tardoc/notes/` on first run and never touched again. Edit them freely — they are embedded into the viewer on the next `document_targets()` run.
-
-**Marker preservation:**
-
-Generated content sits between `<!-- tardoc:generated -->` markers. Anything you write outside those markers in the `.md` files survives re-runs.
-
-**`llms.txt`:**
-
-Written at the project root following [llmstxt.org](https://llmstxt.org). Paste it into any LLM conversation for instant pipeline context — no indexing required.
-
-**With LLM-generated descriptions:**
-
-```r
-# Auto-generate descriptions for undescribed targets and explain all functions
-# Reads OPENAI_API_KEY env var by default
-tardoc::document_targets(llm = TRUE)
-
-# Ollama — local, free, no API key
-tardoc::document_targets(llm = TRUE, llm_provider = "ollama", llm_model = "llama3.2")
-
-# Anthropic
-tardoc::document_targets(llm = TRUE, llm_provider = "anthropic")
-
-# llama.cpp or any OpenAI-compatible server
-tardoc::document_targets(
-  llm          = TRUE,
-  llm_provider = "openai_compatible",
-  llm_base_url = "http://localhost:8080/v1",
-  llm_model    = "my-model"
-)
-
-# Pass an ellmer Chat object directly
-tardoc::document_targets(llm = TRUE, llm_chat = ellmer::chat_groq())
-```
-
-Requires [`ellmer`](https://ellmer.tidyverse.org/). LLM calls only happen for targets where `description = ""` and for every function page. Results are written back into the `.md` files inside the generated block.
-
----
-
-## Tier 2 — WASM analytics viewer
-
-```r
-tardoc::view_wasm_analytics()
-```
-
-Opens `tardoc/wasm_analytics.html` — a self-contained HTML file that embeds all pipeline data and loads [DuckDB WASM](https://duckdb.org/docs/api/wasm/overview.html) from CDN. Opens as `file://`. No R process, no server, no installation required on the viewer's side.
-
-This is the right tier for:
-- Sharing docs with stakeholders who don't have R installed
-- Deploying to GitHub Pages or any static host
-- Including analytics in CI-generated documentation sites
-
-**What you get beyond the static viewer:**
-
-- **Full SQL editor** against `targets`, `functions`, and `edges` tables
-- **dplyr syntax** — the dplyr DuckDB community extension is loaded automatically
-- **BM25 full-text search** — scores results by relevance, not just fuzzy matching
-- **Recursive lineage queries** — upstream / downstream at any depth via CTEs
-- **Pre-built queries** — status summary, errored targets, most connected, missing descriptions, function usage
-
-```sql
--- Examples of what you can write in the SQL editor:
-targets %>% filter(status == "errored") %>% select(name, command, last_built)
-
-WITH RECURSIVE up AS (
-  SELECT from_target name, 1 depth FROM edges WHERE to_target = 'report'
-  UNION ALL
-  SELECT e.from_target, u.depth+1 FROM edges e JOIN up u ON e.to_target = u.name
-)
-SELECT DISTINCT name, depth FROM up ORDER BY depth, name
-```
-
-> **Note:** The viewer shows a "Snapshot" banner. The data was embedded at `document_targets()` time. Re-run to update it.
-
----
-
-## Tier 3 — Server analytics viewer
-
-```r
-install.packages(c("duckdb", "callr", "DBI", "httpuv"))
-tardoc::view_tardoc_db()
-```
-
-**The first call builds the database.** `document_targets()` does not create
-`tardoc/tardoc.duckdb` — `view_tardoc_db()` does, from the same `_targets.R`
-and roxygen sources, if the file is not already there. Later calls reuse it;
-pass `db_extensions = TRUE` to rebuild with the community extensions.
-
-Then it starts two local services:
-
-- A **DuckDB Quack server** (`callr::r_bg()`) serving `tardoc/tardoc.duckdb` on port 9494. The browser's DuckDB WASM attaches to it with the [Quack protocol](https://duckdb.org/2026/05/12/quack-remote-protocol) and runs every query server-side.
-- A minimal **httpuv** server on port 9000 delivering the session HTML.
-
-`view_tardoc_db()` waits for the Quack port to accept a connection before
-handing the page over — typically a few seconds, most of it the one-off
-extension install. If the server does not come up it says why, and the viewer
-serves the JSON snapshot instead, with the reason on the **JSON** chip's
-tooltip and in the browser console.
-
-> **Quack needs a recent DuckDB WASM.** The viewer pins the newest stable
-> `@duckdb/duckdb-wasm` (1.32.0), which bundles DuckDB **1.4.3**. The `quack`
-> extension loads there, but the engine has no `quack` secret type, so
-> `CREATE SECRET (TYPE quack, …)` fails and the viewer falls back to JSON.
-> Verified working on DuckDB **1.5.5**, which today ships only in
-> `@duckdb/duckdb-wasm` prereleases. Until a stable release carries 1.5.3 or
-> newer, tier 3 serves the snapshot — rebuilt on every `view_tardoc_db()`
-> call, so it is current, just not live. The R-side server itself works: any
-> DuckDB 1.5.3+ client can attach to it. Details, evidence and the one-line
-> change to make when a stable build ships:
-> [`docs/quack-remote-access.md`](docs/quack-remote-access.md).
-
-**Additional capabilities over Tier 2:**
-
-- **Semantic search** — off by default. `db_extensions` is `FALSE`, so the first build installs no community extensions. Run `view_tardoc_db(db_extensions = TRUE)` once and, if `quackformers` and `faiss` can be installed, BERT embeddings (all-MiniLM-L6-v2, 384-dim) and a HNSW32 FAISS index are stored in the database. "Find targets related to outlier removal" then works even when those words don't appear in descriptions.
-- **Live data** — when Quack attaches, queries run against the current database state rather than a snapshot. See the note above on which DuckDB WASM builds can attach.
-
-**`tardoc.duckdb` capability flags** — check what was built:
-
-```r
-con  <- duckdb::dbConnect(duckdb::duckdb(), "tardoc/tardoc.duckdb", read_only = TRUE)
-DBI::dbGetQuery(con, "SELECT * FROM _meta")
-#   has_fts  has_embeddings  has_faiss  has_mcp
-#      TRUE            TRUE       TRUE     TRUE
-```
-
-After a plain `view_tardoc_db()` only `has_fts` is `TRUE` — FTS is a core
-DuckDB extension, the other three are community ones that `db_extensions`
-gates.
-
-**Community extensions (all optional, all off unless you ask for them):**
-
-| Extension | Provides | Install |
-|---|---|---|
-| `quackformers` | BERT embeddings | `INSTALL quackformers FROM community` |
-| `faiss` | HNSW32 ANN index | `INSTALL faiss FROM community` |
-| `duckdb_mcp` | MCP server + config | `INSTALL duckdb_mcp FROM community` |
-
-They are installed inside the DuckDB process when the database is built with `view_tardoc_db(db_extensions = TRUE)`. Each step is wrapped in `tryCatch` — if an extension is unavailable the build continues, `_meta` records the flag, and `_meta_detail` records *why* the layer was skipped:
-
-```r
-DBI::dbGetQuery(con, "SELECT * FROM _meta_detail")
-#   capability  available  reason
-#   embeddings       TRUE  NA
-#   faiss            TRUE  NA
-#   fts              TRUE  NA
-#   mcp              TRUE  NA
-```
-
-A layer that did not build carries its reason instead of `NA`: the extension
-manager's own error when an extension cannot be installed, `requires
-embeddings` for FAISS when the embedding step failed, or `db_extensions =
-FALSE` when you never asked for it.
-
-The FAISS index is stored beside the database as `tardoc/*.faiss` rather than inside `tardoc.duckdb` — that is how the extension persists indexes. Keep those files next to the database; `view_tardoc_db()` reloads them on startup and disables semantic search if they are missing.
-
----
-
-## Tier 4 — LLM chat
-
-```r
-# Cloud providers
-tardoc::view_tardoc_db(llm_chat = ellmer::chat_openai())
-tardoc::view_tardoc_db(llm_chat = ellmer::chat_anthropic())
-tardoc::view_tardoc_db(llm_chat = ellmer::chat_google_gemini())
-
-# Local — Ollama (free, manages models)
-tardoc::view_tardoc_db(llm_chat = ellmer::chat_ollama("llama3.2"))
-
-# Local — llama.cpp server
-tardoc::view_tardoc_db(
-  llm_chat = ellmer::chat_openai_compatible(
-    base_url = "http://localhost:8080/v1",
-    model    = "my-model"
-  )
-)
-```
-
-Adds a **Chat** tab to the analytics viewer. The LLM runs entirely server-side via [ellmer](https://ellmer.tidyverse.org/) — no API keys in the browser, no provider-specific JavaScript.
-
-The browser sends a plain text message to the `/chat` httpuv endpoint. ellmer processes it with a `run_sql` tool registered against the live DuckDB connection. The LLM decides whether to run one query, several queries, or just answer from context. All SQL executed is shown inline in the chat alongside the LLM's interpretation.
-
-**Built-in conversation starters:**
-
-- **Onboarding** — "Give me an overview of this pipeline, the main data flow, and targets I should know about first"
-- **Impact analysis** — "If I change how `clean_data` works, which downstream targets would be affected and why?"
-- **Health check** — "Are there any problems? Look for errored targets, missing descriptions, or anything unusual"
-- **Explore** — "What are the most critical targets — the ones that the most downstream work depends on?"
-
-**Provider support via ellmer:**
-
-| Call | Provider |
-|---|---|
-| `ellmer::chat_openai()` | OpenAI — reads `OPENAI_API_KEY` |
-| `ellmer::chat_anthropic()` | Anthropic — reads `ANTHROPIC_API_KEY` |
-| `ellmer::chat_ollama("llama3.2")` | Ollama — local, free, no key |
-| `ellmer::chat_openai_compatible(base_url=...)` | llama.cpp, vLLM, any OAI-compatible |
-| `ellmer::chat_google_gemini()` | Google Gemini |
-
-> **Local model caveat:** Description and explanation generation (`llm = TRUE`) are simple completions that work with any model. The analytics chat requires reliable tool calling, which smaller local models handle inconsistently. Cloud models (GPT-4o, Claude, Gemini) work well.
-
----
-
-## On large pipelines
-
-Checked against a synthetic pipeline of **420 targets and 120 functions**.
-
-A flat sidebar does not survive that: it was 420 rows and 12,600px of scroll,
-of which a 900px viewport showed 7%. Now the default list is grouped and
-capped at 40 — **errored and outdated targets are never truncated**, because
-they are the reason you opened the page, while the healthy majority is
-summarised as *Showing 40 of 420 · show all*. Functions group by source file.
-Navigating to something the cap hides pins it at the top under **Current**, so
-the sidebar always shows where you are.
-
-Search reaches the rest. It spans targets and functions together, since you
-rarely know in advance whether what you want is a target or the function
-behind it, and it is weighted toward names so exact matches rank first.
-
-### Grouping the graph
-
-420 nodes in a layered layout is a line nobody can read. When tardoc can find
-a grouping worth offering, the overview gets a **group** toggle that collapses
-it to one node per group; clicking a group drills into it, and *back to
-groups* returns. The flat graph stays the default — grouping is an option, not
-a rewrite of the view.
-
-![The 420-target pipeline collapsed to six group nodes, each labelled with its file and target count](man/figures/viewer-grouped.png)
-
-The groups are found rather than configured. [`target_groups()`](#target_groupstargets_data-cfg-method) tries four
-signals in descending order of authority and takes the first that clears a
-quality bar:
-
-| Signal | What it uses |
-|---|---|
-| `declaration` | The file each target is declared in — parsed from `_targets.R` and everything it sources. A project split into `targets/ingest.R`, `targets/model.R` has already declared its grouping |
-| `functions` | The source file of the functions a target calls |
-| `prefix` | A shared name prefix: `ingest_01`, `ingest_02` → `ingest` |
-| `depth` | Bands of dependency depth. A last resort |
-
-A grouping only counts if it has 2–20 groups, averages at least three members
-each, and has no group holding more than 70% of the pipeline — so a bad
-grouping is rejected rather than shown. Below 15 targets `auto` does not group
-at all: seven targets read fine as a list.
-
-**Authority beats arithmetic.** On a long chain, depth bands score *better*
-than a name prefix — six tidy bands against three uneven groups — but they are
-the worse reading of the pipeline. Taking the first signal past the bar rather
-than the highest-scoring one is what keeps the precedence meaningful. There is
-a test pinning exactly that.
-
-Force or disable it with `document_targets(group_by = "declaration")`,
-`"prefix"`, `"none"` and so on. A named method is honoured even when it falls
-short of the bar; only `"auto"` is fussy.
-
-### Still open
-
-The viewer is a single self-contained file — 1.1 MB for this pipeline — and it
-grows with the number of pages. Roughly a third of that is the graph payload,
-much of which duplicates the search index, so slimming it is the next move;
-splitting pages into separately fetched files would scale further but costs
-`file://` support, which is worth more.
-
----
-
-## Publishing to GitHub Pages
-
-Docs that live on someone's laptop get stale. A workflow ships with the package that regenerates them from `_targets.R` on every push and publishes the tier 1 viewer:
-
-```r
-file.copy(
-  system.file("templates", "pipeline-docs.yaml", package = "tardoc"),
-  ".github/workflows/docs.yaml"
-)
-```
-
-Then enable **Settings → Pages → Source: GitHub Actions**. The site rebuilds on every push to `main`, so it cannot drift from the pipeline.
-
-**Running the pipeline in CI is optional.** `tar_manifest()` and `tar_network()` read `_targets.R` alone, so the docs build without a store — every page renders, with status `Not built`. Keep the `tar_make()` step and you additionally get build status, timings, sizes and the outdated flags. Drop it if your pipeline is slow, needs credentials, or touches data CI cannot reach.
-
-The template also carries an optional **staleness job** that fails the build when a committed `tardoc/` no longer matches what `document_targets()` produces — the same idea as the `man/` freshness check in this repo's own CI. Delete that job if you do not commit the generated docs.
-
-This repository dogfoods it: [`.github/workflows/pages.yaml`](.github/workflows/pages.yaml) publishes the example pipeline in [`inst/examples/station-monitoring`](inst/examples/station-monitoring), so the live site is generated by the same code path you would use.
-
----
-
-## MCP — Claude Desktop and Claude Code
-
-```r
-tardoc::serve_tardoc_mcp()
-```
-
-Starts the `duckdb_mcp` extension as an MCP server, exposing `tardoc.duckdb` as a live data source. Prints a config snippet to paste into your Claude Desktop `claude_desktop_config.json`. Once configured, Claude Desktop and Claude Code can query the pipeline database directly via tool use — no tardoc viewer needed.
-
-**This needs a database built with extensions.** `serve_tardoc_mcp()` reads
-`tardoc/tardoc.duckdb` and the `tardoc/tardoc_mcp_config.json` written beside
-it, and both come from `view_tardoc_db(db_extensions = TRUE)` — neither is
-produced by `document_targets()`. If the database is missing, run that first.
-
-**What this enables:**
-
-In Claude Desktop or Claude Code, questions like *"which targets depend on `clean_raw`?"* or *"show me all errored targets"* are answered by running SQL against the live database rather than relying on the LLM's context window.
-
----
-
-## Full function reference
-
-### `document_targets()`
-
-| Argument | Default | Description |
-|---|---|---|
-| `project_path` | `"."` | Targets project root |
-| `site_dir` | `"tardoc"` | Output subfolder |
-| `pkg_name` | `"targets docs"` | Title in viewer headers |
-| `pkg_desc` | `""` | Description for `llms.txt` |
-| `repo_url` | `NULL` | Repo base URL for source links, e.g. `"https://github.com/user/repo/blob/main/"` |
-| `llm` | `FALSE` | Auto-generate missing descriptions and function explanations |
-| `llm_chat` | `NULL` | Pre-configured ellmer Chat object |
-| `llm_provider` | `"openai"` | `"openai"`, `"anthropic"`, `"ollama"`, `"openai_compatible"` |
-| `llm_model` | `NULL` | Model name — NULL uses ellmer's default |
-| `llm_api_key` | `NULL` | API key — NULL reads env var |
-| `llm_base_url` | `NULL` | Base URL for `openai_compatible` |
-
-### `view_tardoc()`
-
-Opens `viewer.html` as `file://`. No server. No dependencies.
-
-### `view_wasm_analytics()`
-
-Opens `wasm_analytics.html` as `file://`. DuckDB WASM from CDN. Data embedded at build time.
-
-### `view_tardoc_db()`
-
-Builds `tardoc.duckdb` if it is not already there, then serves it.
-
-| Argument | Default | Description |
-|---|---|---|
-| `project_path` | `"."` | Targets project root |
-| `site_dir` | `"tardoc"` | Output subfolder used by `document_targets()` |
-| `port` | `9000` | httpuv HTML server port |
-| `quack_port` | `9494` | Quack DuckDB server port |
-| `llm_chat` | `NULL` | ellmer Chat for the chat tab |
-| `db_extensions` | `FALSE` | Install the community extensions and rebuild the database. Slow on first run; required for semantic search and MCP |
-
-### `serve_tardoc_mcp()`
-
-| Argument | Default | Description |
-|---|---|---|
-| `project_path` | `"."` | Targets project root |
-| `site_dir` | `"tardoc"` | Output subfolder used by `document_targets()` |
-| `port` | `8765` | MCP server port |
-
-### `generate_reactflow_graph(targets_data, cfg, pkg_name)`
-
-Writes a standalone full-screen `reactflow_graph.html` — the same graph as the
-viewer's, without the surrounding documentation. Not part of a default
-`document_targets()` run.
-
-### `build_dag_graph(targets_data, include_functions = TRUE)` / `dag_layout(nodes, edges)`
-
-The graph data and layout used by the viewer. `build_dag_graph()` returns the
-`{nodes, edges}` list React Flow consumes; `dag_layout()` assigns each node a
-column by longest-path depth. Exported so you can build a graph of your own.
-
-### `pipeline_profile(targets_data, top = 10)` / `critical_path(nodes, edges)`
-
-Where a run spends its time and space. `pipeline_profile()` returns totals,
-the slowest and largest targets, and the critical path; `critical_path()` is
-the underlying longest-weight walk and is useful on its own.
-
-### `record_run_snapshot(targets_data, cfg)` / `read_run_history(cfg)` / `diff_run_history(history)`
-
-The run history behind **Since the last build**. `record_run_snapshot()` is
-called for you during `document_targets()` and appends to
-`tardoc/history.json` only when something differs from the previous build.
-`diff_run_history()` compares the two most recent snapshots.
-
-### `get_fn_docs(fn_name, file)`
-
-Returns roxygen documentation for a single function as a markdown string.
-
-### `moxygenise(codepath, manpath)` / `moxygenise_file(file, manpath)`
-
-Generate `.Rd` files from roxygen comments without a formal package structure.
-
----
-
-## Package dependencies
-
-### Always required (Imports)
-
-`targets`, `dplyr`, `purrr`, `stringr`, `roxygen2`, `Rd2md`, `jsonlite`
-
-### Optional (Suggests)
-
-| Package | When needed |
-|---|---|
-| `duckdb`, `DBI` | Tier 3 server analytics + `tardoc.duckdb` generation |
-| `callr` | Tier 3 background Quack server + MCP server |
-| `httpuv` | Tier 3 HTML server |
-| `ellmer` | `llm = TRUE` at build time, or Tier 4 chat |
-
----
-
-## Does a store need to exist?
-
-No. `tar_manifest()` and `tar_network()` only require `_targets.R`. The full documentation can be generated from a pipeline that has never been run.
-
-If a store is present, build status and timestamps appear on target pages. Without one every target reads `Not built`, which is accurate rather than a gap.
-
-`tar_outdated()` re-hashes files and dependencies, so on a large pipeline it costs a few seconds. Pass `document_targets(check_outdated = FALSE)` to skip it; status then falls back to reporting errors only.
-
-A dynamically branched target is a special case worth knowing about: its own metadata row carries no build time — only its branches do — and its errors live on the branch rows too. tardoc reads the branches, so a branched target that has run reports `Up-to-date`, and one with a failed branch reports `Errored` rather than hiding it.
-
----
-
-
+![The tardoc viewer showing an interactive targets pipeline dependency graph](man/figures/viewer-overview.png)
+
+Nothing in that screenshot is hand-written: every page, badge and graph comes
+from `_targets.R` and the roxygen comments in `R/`. It is the example pipeline in
+[`inst/examples/station-monitoring`](https://github.com/CathalByrneGit/tardoc/tree/main/inst/examples/station-monitoring), published
+on every push — open the
+**[live demo](https://cathalbyrnegit.github.io/tardoc/example/)**.
+
+## What you get
+
+`document_targets()` writes one `.md` per target and per function, plus two
+self-contained HTML files that open as `file://` — no server, no R on the
+reader's side:
+
+- **The viewer.** An interactive React Flow graph of the pipeline, a sidebar that
+  stays usable at several hundred targets, fuzzy search, and a page per target and
+  per function carrying status, timings, sizes, errors, per-branch detail, the
+  critical path, a diff against the previous build, and function source *with its
+  comments intact*.
+- **Freshness, not just errors.** Every target reads `Up-to-date`, `Outdated`,
+  `Errored` or `Not built`, so a target invalidated by an upstream change is
+  visible before you run anything.
+- **A WASM analytics page.** DuckDB in the browser: SQL, dplyr syntax, BM25
+  search and recursive lineage queries over the pipeline.
+- **`llms.txt`** at the project root, for pasting a pipeline into an LLM
+  conversation.
+
+Three optional layers go further: a live DuckDB server with semantic search, an
+LLM chat tab, and the pipeline database as an MCP server for Claude Desktop and
+Claude Code.
+
+A store does not have to exist. `tar_manifest()` and `tar_network()` read
+`_targets.R` alone, so a pipeline that has never been run documents fully — with
+every target reading `Not built`, which is accurate rather than a gap.
+
+## Documentation
+
+Full documentation is at
+**[cathalbyrnegit.github.io/tardoc](https://cathalbyrnegit.github.io/tardoc/)**:
+
+- [Get started](https://cathalbyrnegit.github.io/tardoc/get-started.html) —
+  install, what gets written, and whether you need a store
+- [The viewer](https://cathalbyrnegit.github.io/tardoc/viewer.html) — every page
+  of it, and how the sidebar and graph behave at 420 targets
+- [Analytics, chat and MCP](https://cathalbyrnegit.github.io/tardoc/analytics.html)
+  — SQL, semantic search, the chat tab, the MCP server
+- [Publishing](https://cathalbyrnegit.github.io/tardoc/publishing.html) —
+  regenerating the docs in CI so they cannot drift
+- [Manual](https://cathalbyrnegit.github.io/tardoc/manual.html) — every exported
+  function
+- [Design notes](https://cathalbyrnegit.github.io/tardoc/notes/) — why the graph
+  is React Flow, how Quack remote access works, and what it would take to publish
+  a whole targets project to the browser
+- [Playground](https://cathalbyrnegit.github.io/tardoc/playground/) — tardoc
+  running in your browser, under webR
+
+## Licence
+
+MIT. See [LICENSE](https://github.com/CathalByrneGit/tardoc/blob/main/LICENSE).

@@ -53,7 +53,7 @@ score_grouping <- function(g, min_per_group = 3, max_share = 0.7) {
 
 #' Work out how a pipeline's targets group
 #'
-#' Tries each signal in turn and returns the best-scoring one:
+#' Tries each signal in turn and takes the first that clears the bar:
 #'
 #' \describe{
 #'   \item{`declaration`}{The file each target is declared in. This is the

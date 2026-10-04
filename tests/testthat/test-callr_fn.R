@@ -8,7 +8,7 @@
 # current session instead, and everything works.
 #
 # The check is for the capability rather than the platform, because that is
-# what callr itself looks for -- see docs/webr-feasibility.md.
+# what callr itself looks for -- see site/notes/webr-feasibility.md.
 
 test_that("a spawnable R gives the subprocess reader", {
   # This machine has one; if it did not, targets' own default would be broken.

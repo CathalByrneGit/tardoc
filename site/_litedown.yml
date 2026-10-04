@@ -1,0 +1,16 @@
+# Replaces the litedown-site template's copy of this file, so it has to carry
+# everything that one does (the footer include, numbered sections) as well as
+# the reason it exists: include_before overrides litedown's generated nav bar,
+# which lists pages alphabetically and labels them from their filenames. A
+# documentation site wants Get started first, the reference material last, and
+# "Live demo" rather than "Example". _nav.md is the one file to edit when a page
+# is added; the leading underscore keeps it out of the site's own inputs.
+site:
+
+output:
+  html:
+    meta:
+      include_before: "_nav.md"
+      include_after: "_footer.md"
+    options:
+      number_sections: true
