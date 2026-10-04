@@ -65,8 +65,10 @@ jobs:
       - uses: yihui/actions/litedown-site@main
         with:
           site-dir: 'site'
-          # The default leaves the .md sources beside the .html they produced.
-          cleanup: 'rm -f *.Rmd *.md *.yml _*'
+          # The default leaves the .md sources beside the .html they produced,
+          # and the action ships its own playground/ whether or not the package
+          # provides one -- this site has no use for a webR editor.
+          cleanup: 'rm -f *.Rmd *.md *.yml _*; rm -rf playground'
 
       # Must come after the site build: these are hundreds of .md files, and
       # litedown would otherwise render every one of them as a site page.

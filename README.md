@@ -72,8 +72,6 @@ Full documentation is at
 - [Design notes](https://cathalbyrnegit.github.io/tardoc/notes/) — why the graph
   is React Flow, how Quack remote access works, and what it would take to publish
   a whole targets project to the browser
-- [Playground](https://cathalbyrnegit.github.io/tardoc/playground/) — tardoc
-  running in your browser, under webR
 
 ## Licence
 

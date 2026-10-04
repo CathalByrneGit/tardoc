@@ -5,6 +5,5 @@
 [Publishing](/publishing.html)
 [Manual](/manual.html)
 [Examples](/examples.html)
-[Playground](/playground/)
 [Design notes](/notes/)
 [Live demo](/example/)

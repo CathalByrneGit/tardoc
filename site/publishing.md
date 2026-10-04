@@ -54,6 +54,3 @@ host it without the cross-origin isolation headers webR is usually said to need.
 The measurements, the costs, and what a `publish_webr()` command would still have
 to settle are in the
 [webR design note](notes/webr-feasibility.html).
-
-The [playground](playground/) on this site is a smaller version of the same idea:
-R running in your browser, with tardoc installed.
