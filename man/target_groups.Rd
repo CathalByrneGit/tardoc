@@ -34,7 +34,7 @@ vector of group label per target name. \code{groups} is empty when no signal
 produced a usable grouping.
 }
 \description{
-Tries each signal in turn and returns the best-scoring one:
+Tries each signal in turn and takes the first that clears the bar:
 }
 \details{
 \describe{

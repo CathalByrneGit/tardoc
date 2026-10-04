@@ -1,0 +1,85 @@
+---
+title: Document a pipeline from scratch
+---
+
+Everything tardoc needs is a `_targets.R` and the R files it sources. This builds
+a three-target pipeline in a temporary directory, runs it, and documents it.
+
+```{r}
+#| comment: "#>"
+proj <- file.path(tempdir(), "demo-pipeline")
+dir.create(file.path(proj, "R"), recursive = TRUE, showWarnings = FALSE)
+
+writeLines(c(
+  "#' Read the raw readings",
+  "#'",
+  "#' @param n Number of observations to simulate.",
+  "#' @return A data frame of readings.",
+  "read_readings <- function(n = 200) {",
+  "  set.seed(1)",
+  "  data.frame(station = rep(c('A', 'B'), length.out = n),",
+  "             temp_c   = round(rnorm(n, 12, 30), 1))",
+  "}",
+  "",
+  "#' Drop impossible readings",
+  "#'",
+  "#' @param readings Raw readings.",
+  "#' @param min_c,max_c Rated range of the probe, in Celsius.",
+  "#' @return The readings inside the probe's range.",
+  "clean_readings <- function(readings, min_c = -40, max_c = 85) {",
+  "  # Out-of-range values mean a probe was being serviced, not that the",
+  "  # station was that cold. Dropping is deliberate: imputing would invent",
+  "  # readings, and the counts downstream are reported as observed.",
+  "  readings[readings$temp_c >= min_c & readings$temp_c <= max_c, ]",
+  "}"
+), file.path(proj, "R", "functions.R"))
+
+writeLines(c(
+  "library(targets)",
+  "tar_source('R')",
+  "",
+  "list(",
+  "  tar_target(raw, read_readings(400),",
+  "             description = 'Simulated logger export'),",
+  "  tar_target(clean, clean_readings(raw),",
+  "             description = 'Readings inside the probe range'),",
+  "  tar_target(by_station, aggregate(temp_c ~ station, clean, mean))",
+  ")"
+), file.path(proj, "_targets.R"))
+```
+
+Run it. `callr_function = NULL` reads `_targets.R` in this session rather than a
+subprocess, which is what makes this work in a browser as well as on a desktop.
+
+```{r}
+#| comment: "#>"
+withr::with_dir(proj, targets::tar_make(callr_function = NULL))
+```
+
+Now document it. One call writes the markdown, the viewer and the WASM analytics
+page.
+
+```{r}
+#| comment: "#>"
+tardoc::document_targets(project_path = proj, pkg_name = "Demo pipeline")
+
+list.files(file.path(proj, "tardoc"), recursive = TRUE)
+```
+
+Each target gets a markdown page carrying its status, command, timings and the
+functions it calls — this is what the viewer renders:
+
+```{r}
+#| comment: ""
+cat(readLines(file.path(proj, "tardoc", "targets", "clean.md")), sep = "\n")
+```
+
+And each function gets one, with its roxygen rendered and its source kept
+verbatim — comments included, because the source is read from the file rather
+than reconstructed from the parsed function:
+
+```{r}
+#| comment: ""
+cat(readLines(file.path(proj, "tardoc", "functions", "clean_readings.md")),
+    sep = "\n")
+```

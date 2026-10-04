@@ -34,11 +34,26 @@ load_targets_data <- function(cfg, check_outdated = TRUE) {
   # All targets:: calls must run from the project directory so they find
   # _targets.R and the store, regardless of the caller's working directory.
   withr::with_dir(cfg$project_path, {
-    targets::tar_config_set(store = cfg$targets_store)
+    # The store is passed per call rather than set globally. tar_config_set()
+    # writes _targets.yaml in the user's project, and cfg$targets_store is an
+    # absolute path, so documenting a pipeline used to leave a machine path
+    # committed in their repository -- breaking the project on every other
+    # machine, in CI, and under webR. It was gratuitous too: everything here
+    # already runs inside the project directory, where the default relative
+    # "_targets" is what targets would have used anyway.
+    store <- cfg$targets_store
+
+    # targets reads the pipeline in a subprocess by default, which isolates
+    # _targets.R from the calling session. Where no subprocess can be spawned
+    # -- webR, where R.home("bin")/R does not exist -- it reads it in place
+    # instead. See .callr_fn().
+    cf <- .callr_fn()
 
     # These two only need _targets.R ---------------------------------------
-    manifest     <- targets::tar_manifest()
-    network      <- targets::tar_network(targets_only = FALSE, reporter = "silent")
+    # tar_manifest() takes no store: it reads _targets.R alone.
+    manifest     <- targets::tar_manifest(callr_function = cf)
+    network      <- targets::tar_network(targets_only = FALSE, reporter = "silent",
+                                         callr_function = cf, store = store)
     target_names <- dplyr::pull(manifest, "name")
 
     # Meta needs the store -------------------------------------------------
@@ -46,8 +61,9 @@ load_targets_data <- function(cfg, check_outdated = TRUE) {
 
     progress <- NULL
     if (has_store) {
-      meta <- targets::tar_meta(fields = targets::everything())
-      progress <- tryCatch(targets::tar_progress(), error = function(e) NULL)
+      meta <- targets::tar_meta(fields = targets::everything(), store = store)
+      progress <- tryCatch(targets::tar_progress(store = store),
+                           error = function(e) NULL)
       message("Store found -- run metadata loaded.")
     } else {
       message("No store found -- status and timestamps will be unavailable.")
@@ -61,7 +77,8 @@ load_targets_data <- function(cfg, check_outdated = TRUE) {
     outdated <- NULL
     if (isTRUE(check_outdated)) {
       outdated <- tryCatch(
-        as.character(targets::tar_outdated(reporter = "silent")),
+        as.character(targets::tar_outdated(reporter = "silent",
+                                           callr_function = cf, store = store)),
         error = function(e) {
           message("Could not determine outdated targets (", conditionMessage(e),
                   ") -- falling back to error-only status.")
@@ -101,4 +118,28 @@ load_targets_data <- function(cfg, check_outdated = TRUE) {
     bytes  = NA_real_,
     format = NA_character_
   )
+}
+
+#' The `callr_function` to hand `targets`
+#'
+#' `targets` reads `_targets.R` in a subprocess by default, which keeps the
+#' pipeline's environment out of the caller's session. That needs an R
+#' executable, and some R builds have none: in webR, `R.home("bin")/R` does
+#' not exist and every such call fails with "Cannot find R executable".
+#'
+#' The check is the capability rather than the platform -- it is exactly what
+#' `callr` itself looks for -- so any environment without a spawnable R gets
+#' the in-process reader without tardoc having to know its name.
+#'
+#' @return `callr::r` when a subprocess can be spawned, otherwise `NULL`,
+#'   which tells `targets` to read the pipeline in the current session.
+#' @keywords internal
+.callr_fn <- function() {
+  # callr is a hard dependency of targets, so it is present wherever targets
+  # is; the guard is for the odd install where it is not.
+  spawnable <- any(file.exists(file.path(R.home("bin"), c("R", "R.exe"))))
+  if (spawnable && requireNamespace("callr", quietly = TRUE)) {
+    return(callr::r)
+  }
+  NULL
 }

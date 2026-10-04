@@ -6,11 +6,12 @@
 \alias{tardoc-package}
 \title{tardoc: Generate Documentation and Analytics for targets Pipelines}
 \description{
-Auto-generates documentation for targets pipelines across four tiers: (1) A self-contained HTML viewer with Fuse.js search and mermaid graphs; (2) A DuckDB WASM analytics viewer with full SQL, BM25 search, dplyr syntax, and recursive lineage queries — self-contained, opens as file://; (3) A Quack-protocol server analytics viewer with BERT semantic search (quackformers) and a FAISS ANN index; (4) An LLM chat interface over the pipeline database via ellmer, supporting OpenAI, Anthropic, Ollama, llama.cpp, and any OpenAI-compatible provider. The pipeline database is also exposable as an MCP server (duckdb_mcp) for use with Claude Desktop and Claude Code. When llm=TRUE, descriptions are auto-generated for undescribed targets and explanations added to function pages.
+Auto-generates documentation for a 'targets' pipeline from '_targets.R' and the roxygen comments beside it: one markdown file per target and per function, plus a self-contained HTML viewer with an interactive dependency graph, fuzzy search, build status, timings, per-branch detail and verbatim function source. Freshness, the critical path and a diff against the previous build are reported alongside. Optional layers add a DuckDB WASM analytics page that opens from the filesystem, a local DuckDB server with full-text and semantic search, an LLM chat interface over the pipeline database via 'ellmer', and the same database as an MCP server for use with coding agents.
 }
 \seealso{
 Useful links:
 \itemize{
+  \item \url{https://cathalbyrnegit.github.io/tardoc/}
   \item \url{https://github.com/CathalByrneGit/tardoc}
   \item Report bugs at \url{https://github.com/CathalByrneGit/tardoc/issues}
 }

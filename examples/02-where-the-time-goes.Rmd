@@ -1,0 +1,69 @@
+---
+title: Where a run spends its time
+---
+
+A pipeline's wall-clock floor is not its total runtime — it is the longest chain
+of dependencies, because nothing on that chain can be run in parallel with the
+rest of it. `pipeline_profile()` reports both, and `critical_path()` is the walk
+underneath.
+
+Two chains, one deliberately slow:
+
+```{r}
+#| comment: "#>"
+proj <- file.path(tempdir(), "profile-demo")
+dir.create(proj, recursive = TRUE, showWarnings = FALSE)
+
+writeLines(c(
+  "library(targets)",
+  "",
+  "list(",
+  "  tar_target(seed,   { Sys.sleep(0.2); 1 }),",
+  "  tar_target(slow_a, { Sys.sleep(0.6); seed + 1 }),",
+  "  tar_target(slow_b, { Sys.sleep(0.6); slow_a + 1 }),",
+  "  tar_target(slow_c, { Sys.sleep(0.6); slow_b + 1 }),",
+  "  tar_target(quick,  { Sys.sleep(0.1); seed * 10 }),",
+  "  tar_target(report, paste(slow_c, quick))",
+  ")"
+), file.path(proj, "_targets.R"))
+
+withr::with_dir(proj, targets::tar_make(callr_function = NULL))
+```
+
+Read the pipeline, then profile it. `check_outdated = FALSE` skips the re-hashing
+pass; freshness is not what this example is about.
+
+```{r}
+#| comment: "#>"
+cfg <- tardoc::build_site_config(proj)
+tardoc::setup_site_dirs(cfg)
+td <- tardoc::load_targets_data(cfg, check_outdated = FALSE)
+
+prof <- tardoc::pipeline_profile(td)
+
+prof$slowest
+```
+
+```{r}
+#| comment: "#>"
+prof$critical_path
+
+c(total_seconds    = round(prof$total_seconds, 2),
+  critical_seconds = round(prof$critical_seconds, 2))
+```
+
+The critical path is `seed → slow_a → slow_b → slow_c → report`. Its total is the
+floor on a full rebuild however many workers you give `tar_make()`: `quick` can
+run alongside the slow chain, so its time is free, and shortening it would save
+nothing. That is the number worth optimising, and the viewer draws it on the
+graph.
+
+`critical_path()` works on any `{name, seconds}` frame and edge list, so you can
+run it against your own weights — estimated cost, memory, anything:
+
+```{r}
+#| comment: "#>"
+nodes <- data.frame(name = c("a", "b", "c", "d"), seconds = c(1, 10, 1, 1))
+edges <- data.frame(from = c("a", "a", "b", "c"), to = c("b", "c", "d", "d"))
+tardoc::critical_path(nodes, edges)
+```

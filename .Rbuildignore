@@ -3,4 +3,5 @@
 ^\.Rproj\.user$
 ^\.github$
 ^\.lintr$
-^docs$
+^site$
+^examples$

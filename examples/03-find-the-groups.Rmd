@@ -1,0 +1,73 @@
+---
+title: Finding a pipeline's natural groups
+---
+
+Past a couple of hundred targets a flat graph is one unreadable line. The useful
+clusters are usually already there — in how the author split their files, or how
+they named things — so tardoc looks for them rather than asking you to configure
+them.
+
+A 20-target pipeline with four stages in its names, each stage feeding the next:
+
+```{r}
+#| comment: "#>"
+proj <- file.path(tempdir(), "grouping-demo")
+dir.create(proj, recursive = TRUE, showWarnings = FALSE)
+
+nms <- c(paste0("ingest_", c("csv", "api", "excel", "fix", "join")),
+         paste0("clean_",  c("names", "types", "ranges", "dupes", "units")),
+         paste0("model_",  c("fit", "tune", "cv", "select", "explain")),
+         paste0("report_", c("tables", "figures", "render", "publish", "archive")))
+
+# Each target depends on the one before it, so the pipeline is a single chain:
+# depth bands are available as a grouping signal as well as the name prefixes.
+calls <- c(sprintf("  tar_target(%s, 1)", nms[1]),
+           sprintf("  tar_target(%s, %s + 1)", nms[-1], nms[-length(nms)]))
+
+writeLines(c("library(targets)", "", "list(",
+             paste0(calls, c(rep(",", length(calls) - 1), "")), ")"),
+           file.path(proj, "_targets.R"))
+
+cfg <- tardoc::build_site_config(proj)
+tardoc::setup_site_dirs(cfg)
+td <- tardoc::load_targets_data(cfg, check_outdated = FALSE)
+```
+
+`target_groups()` tries four signals in descending order of authority —
+declaration file, the functions a target calls, name prefix, dependency depth —
+and takes the first that clears a quality bar:
+
+```{r}
+#| comment: "#>"
+g <- tardoc::target_groups(td, cfg)
+
+g$method
+table(g$groups)
+```
+
+Prefix won, and that is the point of the ordering rather than an accident. Depth
+bands score *better* on a chain this shape — six tidy bands against four groups:
+
+```{r}
+#| comment: "#>"
+c(prefix = tardoc::target_groups(td, cfg, method = "prefix")$score,
+  depth  = tardoc::target_groups(td, cfg, method = "depth")$score)
+```
+
+Taking the first signal past the bar instead of the highest-scoring one is what
+keeps the precedence meaningful: a name prefix is the author's own vocabulary,
+and dependency depth is arithmetic.
+
+A grouping has to earn its place. `score_grouping()` rejects the degenerate ones
+outright, so a bad grouping is never offered:
+
+```{r}
+#| comment: "#>"
+c(sensible   = tardoc::score_grouping(rep(c("a", "b", "c"), each = 5)),
+  one_group  = tardoc::score_grouping(rep("everything", 20)),
+  singletons = tardoc::score_grouping(as.character(1:20)))
+```
+
+Below 15 targets `auto` does not group at all — seven targets read perfectly well
+as a list — and a named method is honoured even when it falls short of the bar,
+because the caller asked for it.
