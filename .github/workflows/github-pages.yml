@@ -45,11 +45,17 @@ jobs:
       # Imports only: the site and the example pipeline need nothing from
       # Suggests, and skipping them keeps duckdb, ellmer and devtools out of a
       # build that would only install them to leave them unused.
+      # apt-packages is not optional here: this action installs R packages with
+      # base R and does nothing about system requirements, so the RSPM binary of
+      # igraph (a targets dependency) arrives unable to load for want of
+      # libglpk.so.40. r-lib/actions resolves sysreqs itself, which is why
+      # R-CMD-check never saw this.
       - uses: yihui/actions/setup-r-dependencies@main
         with:
           dependencies: 'Depends, Imports, LinkingTo'
           extra-packages: litedown xfun .
           r-universe: yihui
+          apt-packages: libglpk-dev libxml2-dev
 
       # litedown adds a subfolder to the nav bar when it already contains an
       # index.html, and it computes the nav before rendering anything -- so on a
