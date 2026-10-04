@@ -45,11 +45,17 @@ jobs:
       # Imports only: the site and the example pipeline need nothing from
       # Suggests, and skipping them keeps duckdb, ellmer and devtools out of a
       # build that would only install them to leave them unused.
+      # apt-packages is not optional here: this action installs R packages with
+      # base R and does nothing about system requirements, so the RSPM binary of
+      # igraph (a targets dependency) arrives unable to load for want of
+      # libglpk.so.40. r-lib/actions resolves sysreqs itself, which is why
+      # R-CMD-check never saw this.
       - uses: yihui/actions/setup-r-dependencies@main
         with:
           dependencies: 'Depends, Imports, LinkingTo'
           extra-packages: litedown xfun .
           r-universe: yihui
+          apt-packages: libglpk-dev libxml2-dev
 
       # litedown adds a subfolder to the nav bar when it already contains an
       # index.html, and it computes the nav before rendering anything -- so on a
@@ -98,8 +104,14 @@ jobs:
           name: site-preview
           path: site
 
+      # enablement turns Pages on if it is not already. Without it the first
+      # deploy fails with "Get Pages site failed ... verify that the repository
+      # has Pages enabled", which is what has kept this site from ever going
+      # live -- the build was only half the problem.
       - if: github.event_name != 'pull_request'
         uses: actions/configure-pages@v5
+        with:
+          enablement: true
       - if: github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@v3
         with:

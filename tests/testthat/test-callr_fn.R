@@ -27,9 +27,13 @@ test_that("no R executable means the in-process reader", {
 
 test_that("R.exe counts, so Windows is not treated as unspawnable", {
   home <- withr::local_tempdir()
-  dir.create(file.path(home, "bin"))
-  file.create(file.path(home, "bin", "R.exe"))
   withr::local_envvar(R_HOME = home)
+  # R.home("bin") is <R_HOME>/bin on Unix but <R_HOME>/bin/x64 on Windows, so
+  # the fake layout has to be built where R would look rather than where the
+  # Unix layout puts it -- otherwise this test fails on the one platform whose
+  # executable name it exists to check.
+  dir.create(R.home("bin"), recursive = TRUE, showWarnings = FALSE)
+  file.create(file.path(R.home("bin"), "R.exe"))
   skip_if_not_installed("callr")
   expect_identical(tardoc:::.callr_fn(), callr::r)
 })

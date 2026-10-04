@@ -69,6 +69,9 @@ Full documentation is at
   regenerating the docs in CI so they cannot drift
 - [Manual](https://cathalbyrnegit.github.io/tardoc/manual.html) — every exported
   function
+- [Examples](https://cathalbyrnegit.github.io/tardoc/examples.html) — three
+  worked examples, run when the site is built: documenting a pipeline from
+  scratch, reading a run's critical path, and finding a pipeline's groups
 - [Design notes](https://cathalbyrnegit.github.io/tardoc/notes/) — why the graph
   is React Flow, how Quack remote access works, and what it would take to publish
   a whole targets project to the browser
