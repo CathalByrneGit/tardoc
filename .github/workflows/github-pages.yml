@@ -104,8 +104,14 @@ jobs:
           name: site-preview
           path: site
 
+      # enablement turns Pages on if it is not already. Without it the first
+      # deploy fails with "Get Pages site failed ... verify that the repository
+      # has Pages enabled", which is what has kept this site from ever going
+      # live -- the build was only half the problem.
       - if: github.event_name != 'pull_request'
         uses: actions/configure-pages@v5
+        with:
+          enablement: true
       - if: github.event_name != 'pull_request'
         uses: actions/upload-pages-artifact@v3
         with:
