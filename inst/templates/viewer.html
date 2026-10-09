@@ -223,6 +223,30 @@ a{color:#6d28d9;text-decoration:none}a:hover{text-decoration:underline}
 .search-result-desc{font-size:11px;color:#6c7086;margin-top:2px;
                      white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .item-type{font-size:10px;color:#6c7086;text-transform:uppercase;letter-spacing:.5px;margin-left:6px}
+
+/* Phones: a 280px sidebar beside the content leaves ~100px for it, so the
+   sidebar becomes a bar across the top and its navigation folds behind a
+   Menu button. Opening it is deliberate (the button, or focusing search);
+   choosing a page closes it again. */
+#menu-btn{display:none}
+@media (max-width:760px){
+  body{flex-direction:column}
+  #sidebar{width:100%;min-width:0;flex-shrink:0;max-height:100vh;overflow-y:auto}
+  #sidebar-header{padding:10px 12px;display:grid;grid-template-columns:minmax(0,1fr) auto;
+                  gap:8px;align-items:center}
+  #search-box{grid-column:1 / -1;margin-top:0}
+  #menu-btn{display:block;background:#313244;color:#cdd6f4;border:none;
+            border-radius:6px;padding:6px 12px;font-size:12px;cursor:pointer}
+  #nav-home,#nav-tabs,#nav-list{display:none}
+  #sidebar.nav-open #nav-home{display:flex}
+  #sidebar.nav-open #nav-tabs{display:flex}
+  #sidebar.nav-open #nav-list{display:block;max-height:55vh}
+  #content-area{padding:16px}
+  #home-panel h1{font-size:22px}
+  #page-content table{display:block;overflow-x:auto}
+  #code-modal{padding:12px}
+  #rf-stage{height:min(52vh,420px)}
+}
 </style>
 </head>
 <body>
@@ -230,6 +254,7 @@ a{color:#6d28d9;text-decoration:none}a:hover{text-decoration:underline}
 <div id="sidebar">
   <div id="sidebar-header">
     <h1 id="site-title"></h1>
+    <button id="menu-btn" type="button" aria-expanded="false" onclick="toggleNav()">&#9776; Menu</button>
     <input id="search-box" type="search" placeholder="Search targets and functions...">
   </div>
   <div id="nav-home" onclick="goHome()">&#8962; Home</div>
@@ -933,6 +958,7 @@ function loadPage(type, name) {
   const key  = type + ':' + name;
   const page = PAGE_MAP[key];
   currentKey = key;
+  collapseNav();
   // Record the page in the hash so it can be linked to and survives a reload.
   // The graph page links here as viewer.html#targets:<name>.
   if (location.hash.slice(1) !== key) {
@@ -1059,7 +1085,17 @@ document.addEventListener('keydown', function (ev) {
   }
 }, true);
 
+function toggleNav(open) {
+  const sb = document.getElementById('sidebar');
+  const on = open === undefined ? !sb.classList.contains('nav-open') : open;
+  sb.classList.toggle('nav-open', on);
+  document.getElementById('menu-btn').setAttribute('aria-expanded', on);
+}
+// Only the phone layout hides the navigation, so this is a no-op elsewhere.
+function collapseNav() { toggleNav(false); }
+
 function goHome() {
+  collapseNav();
   document.getElementById('home-panel').style.display   = '';
   document.getElementById('page-content').style.display = 'none';
   currentKey = null;
@@ -1143,6 +1179,7 @@ function renderNav() {
 }
 
 document.getElementById('search-box').addEventListener('input', renderNav);
+document.getElementById('search-box').addEventListener('focus', function () { toggleNav(true); });
 
 renderNavList('targets');
 
