@@ -69,3 +69,30 @@ test_that("re-running preserves content outside generated markers", {
   expect_false(grepl("Version 1", final))
   expect_match(final, "Custom.")
 })
+
+test_that("the source code is shown whether or not repo_url is set", {
+  # With repo_url set, the code used to be replaced by a link, so a project
+  # publishing from CI -- which sets repo_url -- got a Source heading with
+  # nothing under it. The live example site shipped that way.
+  for (url in list(NULL, "https://github.com/user/repo/blob/main/")) {
+    tmp <- withr::local_tempdir()
+    cfg <- build_site_config(tmp, repo_url = url); setup_site_dirs(cfg)
+    cfg$r_scripts_dir <- file.path(tmp, "R"); write_mock_r_file(cfg$r_scripts_dir, "math.R")
+    local_mocked_bindings(get_fn_docs = function(...) "## Description\n\nAdds.", .package = "tardoc")
+    suppressMessages(generate_all_function_pages(cfg))
+    content <- paste(readLines(file.path(cfg$functions_dir, "add.md")), collapse = "\n")
+    expect_match(content, "## Source\n\nDefined in ", fixed = TRUE)
+    expect_match(content, "```r\nadd <- function", fixed = TRUE)
+  }
+})
+
+test_that("with repo_url the file name links to the definition line", {
+  tmp <- withr::local_tempdir()
+  cfg <- build_site_config(tmp, repo_url = "https://github.com/user/repo/blob/main/")
+  setup_site_dirs(cfg)
+  cfg$r_scripts_dir <- file.path(tmp, "R"); write_mock_r_file(cfg$r_scripts_dir, "math.R")
+  local_mocked_bindings(get_fn_docs = function(...) "## Description\n\nAdds.", .package = "tardoc")
+  suppressMessages(generate_all_function_pages(cfg))
+  content <- paste(readLines(file.path(cfg$functions_dir, "add.md")), collapse = "\n")
+  expect_match(content, "(https://github.com/user/repo/blob/main/R/math.R#L", fixed = TRUE)
+})
