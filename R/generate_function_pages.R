@@ -29,20 +29,23 @@ generate_all_function_pages <- function(cfg) {
       docs_md <- suppressWarnings(get_fn_docs(func_name, file))
       if (is.null(docs_md)) docs_md <- "_No roxygen documentation found._"
 
-      repo_href <- .function_repo_link(func_name, file, cfg)
+      repo_href <- .function_repo_link(func_name, file, cfg,
+                                       line = defs[[func_name]]$start)
 
-      source_section <- if (!is.null(repo_href)) {
-        paste0(
-          "## Source\n\n",
-          "Defined in [`", basename(file), "`](", repo_href, ")\n"
-        )
+      # The code is always shown. With a repo_url the heading also links to
+      # the file on the forge -- but as an addition: this used to replace the
+      # code with the link, so any project that set repo_url (as CI does)
+      # published function pages with a Source heading and nothing under it.
+      defined_in <- if (!is.null(repo_href)) {
+        paste0("[`", basename(file), "`](", repo_href, ")")
       } else {
-        paste0(
-          "## Source\n\n",
-          "Defined in `", basename(file), "`\n\n",
-          "```r\n", fun_code, "\n```\n"
-        )
+        paste0("`", basename(file), "`")
       }
+      source_section <- paste0(
+        "## Source\n\n",
+        "Defined in ", defined_in, "\n\n",
+        "```r\n", fun_code, "\n```\n"
+      )
 
       generated_block <- paste0(
         "## Documentation\n\n",
@@ -80,11 +83,18 @@ generate_all_function_pages <- function(cfg) {
 }
 
 #' Build a repo source link for a function
+#' @param func_name Function name.
+#' @param r_file Path to the R file defining it.
+#' @param cfg A site config list; `repo_url` decides whether there is a link.
+#' @param line Optional definition line; looked up when `NULL`.
+#' @return A URL string, or `NULL` when `cfg$repo_url` is unset.
 #' @keywords internal
-.function_repo_link <- function(func_name, r_file, cfg) {
+.function_repo_link <- function(func_name, r_file, cfg, line = NULL) {
   if (is.null(cfg$repo_url)) return(NULL)
   rel  <- paste0("R/", basename(r_file))
-  line <- .find_function_line(func_name, r_file)
+  # The parsed start line is exact; the regex only finds column-one
+  # definitions, so it is the fallback rather than the first choice.
+  if (is.null(line)) line <- .find_function_line(func_name, r_file)
   href <- paste0(cfg$repo_url, rel,
                  if (!is.null(line)) paste0("#L", line) else "")
   href

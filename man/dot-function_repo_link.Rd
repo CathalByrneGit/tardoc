@@ -4,7 +4,19 @@
 \alias{.function_repo_link}
 \title{Build a repo source link for a function}
 \usage{
-.function_repo_link(func_name, r_file, cfg)
+.function_repo_link(func_name, r_file, cfg, line = NULL)
+}
+\arguments{
+\item{func_name}{Function name.}
+
+\item{r_file}{Path to the R file defining it.}
+
+\item{cfg}{A site config list; \code{repo_url} decides whether there is a link.}
+
+\item{line}{Optional definition line; looked up when \code{NULL}.}
+}
+\value{
+A URL string, or \code{NULL} when \code{cfg$repo_url} is unset.
 }
 \description{
 Build a repo source link for a function
