@@ -53,7 +53,7 @@ test_that(".doc_coverage counts what the reader sees on a page", {
   )
   funs <- list(
     page("f", "# Function: `f`\n\n## Documentation\n\nSomething real."),
-    page("g", paste0("# Function: `g`\n\n", .NO_ROXYGEN))
+    page("g", paste0("# Function: `g`\n\n", .no_roxygen_msg()))
   )
   cov <- .doc_coverage(targets, funs)
   expect_identical(cov$targets$total, 2L)

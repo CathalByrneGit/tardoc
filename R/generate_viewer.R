@@ -200,7 +200,7 @@ generate_viewer <- function(targets_data, function_names, cfg,
     I(as.character(unlist(lapply(pages[!keep], `[[`, "name"))))
   }
   t_ok <- vapply(target_pages,   function(p) described(p$content), logical(1))
-  f_ok <- vapply(function_pages, function(p) !grepl(.NO_ROXYGEN, p$content, fixed = TRUE),
+  f_ok <- vapply(function_pages, function(p) !grepl(.no_roxygen_msg(), p$content, fixed = TRUE),
                  logical(1))
   list(
     targets   = list(total = length(target_pages),   missing = nm(target_pages, t_ok)),
