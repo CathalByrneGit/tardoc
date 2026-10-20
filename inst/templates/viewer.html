@@ -236,6 +236,26 @@ a{color:#6d28d9;text-decoration:none}a:hover{text-decoration:underline}
 #home-overview.overview{margin:0 0 24px;background:#f5f3ff;border-color:#ddd6fe}
 #home-overview.overview p,#home-overview.overview li{color:#2e1065;font-size:15px}
 
+#graph-filter{width:min(560px,100%);font-size:13px;padding:6px 10px;border:1px solid #dee2e6;
+  border-radius:6px;background:#fff;color:#212529;font-family:ui-monospace,Menlo,monospace}
+#filter-status{margin-left:10px}
+#filter-status.warn{color:#b45309}
+#stat-doc-card.has-gaps{cursor:pointer}
+#stat-doc-card.has-gaps:hover{border-color:#a78bfa}
+#stat-doc-card.has-gaps .stat-number{color:#b45309}
+#coverage{margin:0 0 24px;background:#fff;border:1px solid #e9ecef;border-radius:8px;padding:12px 18px}
+#coverage summary{cursor:pointer;font-size:14px;color:#495057}
+#coverage h3{font-size:13px;margin:14px 0 6px;color:#495057}
+#coverage .gaps{display:flex;flex-wrap:wrap;gap:6px}
+#coverage .gaps a{background:#f1f3f5;border-radius:5px;padding:3px 9px;font-size:13px;
+  font-family:ui-monospace,Menlo,monospace;cursor:pointer}
+.history-section{margin-top:28px}
+.hist-row{display:flex;align-items:center;gap:14px;margin:6px 0;flex-wrap:wrap}
+.hist-label{width:64px;font-size:13px;color:#495057}
+.hist-now{font-weight:600;font-size:14px}
+.hist-range{font-size:12px;color:#868e96}
+.spark{display:block}
+
 /* Phones: a 280px sidebar beside the content leaves ~100px for it, so the
    sidebar becomes a bar across the top and its navigation folds behind a
    Menu button. Opening it is deliberate (the button, or focusing search);
@@ -296,17 +316,31 @@ a{color:#6d28d9;text-decoration:none}a:hover{text-decoration:underline}
           <div class="stat-number" id="stat-status">-</div>
           <div class="stat-label">Up-to-date</div>
         </div>
+        <div class="stat-card" id="stat-doc-card" title="Targets with a description">
+          <div class="stat-number" id="stat-doc">-</div>
+          <div class="stat-label">Described</div>
+        </div>
         <div class="stat-card" id="stat-outdated-card" style="display:none">
           <div class="stat-number" id="stat-outdated">-</div>
           <div class="stat-label">Outdated</div>
         </div>
       </div>
+      <details id="coverage" style="display:none">
+        <summary id="coverage-summary"></summary>
+        <div id="coverage-body"></div>
+      </details>
       <h2>Pipeline overview</h2>
       <p class="graph-hint">Click a node for details &middot; drag to pan &middot; scroll to zoom
         <label class="fn-toggle"><input type="checkbox" id="show-functions"> show functions</label>
         <label class="fn-toggle" id="cp-toggle-wrap" style="display:none"><input type="checkbox" id="show-critical"> critical path</label>
         <label class="fn-toggle" id="grp-toggle-wrap" style="display:none"><input type="checkbox" id="show-groups"> group</label>
         <span id="grp-crumb" style="display:none"></span>
+      </p>
+      <p class="graph-hint" id="filter-bar">
+        <input id="graph-filter" type="search" autocomplete="off" spellcheck="false"
+               aria-label="Filter the graph"
+               placeholder="Filter: clean+   +report   2+model   ingest_*   -raw_path">
+        <span id="filter-status"></span>
       </p>
       <p class="graph-hint" id="focus-bar" style="display:none">
         <b id="focus-name"></b>
@@ -365,6 +399,7 @@ const GRAPH    = {{GRAPH_JSON}};
 const PROFILE  = {{PROFILE_JSON}};
 const HISTORY  = {{HISTORY_JSON}};
 const OVERVIEW = {{OVERVIEW_JSON}};
+const COVERAGE = {{COVERAGE_JSON}};
 
 const PAGE_MAP = {};
 PAGES.forEach(p => { PAGE_MAP[p.type + ':' + p.name] = p; });
@@ -610,6 +645,66 @@ function clearFocus() {
 });
 document.getElementById('focus-clear').addEventListener('click', clearFocus);
 
+// ---- filter ----------------------------------------------------------------
+//
+// dbt's --select, in the search-box idiom: terms are separated by spaces and
+// unioned; "+name" adds everything upstream, "name+" everything downstream,
+// "2+name" and "name+2" limit the depth; "ingest_*" is a wildcard; a leading
+// "-" removes. It reuses reach() above, so "downstream" means the same thing
+// here as it does when you click a node.
+function parseTerm(raw) {
+  let term = raw, exclude = false;
+  if (term.charAt(0) === '-') { exclude = true; term = term.slice(1); }
+  const m = term.match(/^(?:(\d*)\+)?([^+]+)(?:\+(\d*))?$/);
+  if (!m) return null;
+  const depth = function (d) { return d === '' ? 0 : parseInt(d, 10); };
+  return {
+    raw: raw, exclude: exclude, name: m[2],
+    up:   m[1] === undefined ? null : depth(m[1]),
+    down: /\+\d*$/.test(term) && m[3] !== undefined ? depth(m[3]) : null
+  };
+}
+
+function nameMatcher(pattern) {
+  if (pattern.indexOf('*') < 0) return function (id) { return id === pattern; };
+  const re = new RegExp('^' + pattern.split('*').map(function (p) {
+    return p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }).join('.*') + '$');
+  return function (id) { return re.test(id); };
+}
+
+// Returns { ids: Set, unmatched: [terms that named nothing] }.
+function selectNodes(query, fnShown) {
+  const candidates = GRAPH.nodes.filter(function (n) {
+    return fnShown || n.kind !== 'function';
+  }).map(function (n) { return n.id; });
+
+  const terms = query.split(/[\s,]+/).filter(Boolean).map(parseTerm);
+  const unmatched = [];
+  const expand = function (t) {
+    const test = nameMatcher(t.name);
+    const hit = candidates.filter(test);
+    if (!hit.length) { unmatched.push(t.raw); return []; }
+    const out = {};
+    hit.forEach(function (id) {
+      out[id] = 1;
+      if (t.up !== null)   reach(id, FOCUS_UP,   t.up).forEach(function (n) { out[n] = 1; });
+      if (t.down !== null) reach(id, FOCUS_DOWN, t.down).forEach(function (n) { out[n] = 1; });
+    });
+    return Object.keys(out);
+  };
+
+  const include = terms.filter(function (t) { return t && !t.exclude; });
+  const exclude = terms.filter(function (t) { return t && t.exclude; });
+  terms.forEach(function (t) { if (!t) unmatched.push('?'); });
+
+  const keep = new Set();
+  if (include.length) include.forEach(function (t) { expand(t).forEach(function (id) { keep.add(id); }); });
+  else candidates.forEach(function (id) { keep.add(id); });
+  exclude.forEach(function (t) { expand(t).forEach(function (id) { keep.delete(id); }); });
+  return { ids: keep, unmatched: unmatched, total: candidates.length };
+}
+
 function rfOpen(id) {
   const n = RF_BY_ID[id];
   if (!n) return;
@@ -735,9 +830,12 @@ let rfRoot = null;
 
 // Functions are hidden by default: on a large pipeline they roughly double the
 // node count and the targets are what a reader is usually after.
+let graphFilter = null, filterVersion = 0;
+
 function renderOverview(showFunctions) {
   const visible = GRAPH.nodes.filter(function (n) {
-    return showFunctions || n.kind !== 'function';
+    return (showFunctions || n.kind !== 'function') &&
+           (!graphFilter || graphFilter.has(n.id));
   });
   const ids = {}; visible.forEach(function (n) { ids[n.id] = 1; });
 
@@ -769,7 +867,7 @@ function renderOverview(showFunctions) {
     });
 
   paintFlow(rfNodes, rfEdges, function (_ev, node) { rfOpen(node.id); },
-            'flat:' + (showFunctions ? 'fn' : 'nofn'));
+            'flat:' + (showFunctions ? 'fn' : 'nofn') + ':' + filterVersion);
 }
 
 // Shared by the flat, grouped and drilled-in views.
@@ -893,6 +991,42 @@ function crumb(label, n) {
   box.style.display = '';
 })();
 
+// Documentation coverage. R decides what counts as missing (see
+// .doc_coverage) so the page and the numbers cannot disagree.
+(function () {
+  const t = COVERAGE.targets, f = COVERAGE.functions;
+  const have = t.total - t.missing.length;
+  document.getElementById('stat-doc').textContent = have + '/' + t.total;
+  const gaps = t.missing.length + f.missing.length;
+  if (!gaps) return;
+
+  const chips = function (list, attr) {
+    return '<div class="gaps">' + list.map(function (n) {
+      return '<a ' + attr + '="' + rfEsc(n) + '">' + rfEsc(n) + '</a>';
+    }).join('') + '</div>';
+  };
+  const plural = function (n, w) { return n + ' ' + w + (n === 1 ? '' : 's'); };
+  const parts = [];
+  if (t.missing.length) parts.push(plural(t.missing.length, 'target') + ' without a description');
+  if (f.missing.length) parts.push(plural(f.missing.length, 'function') + ' without roxygen docs');
+  document.getElementById('coverage-summary').textContent = parts.join(' \u00b7 ');
+  document.getElementById('coverage-body').innerHTML =
+    (t.missing.length ? '<h3>Targets</h3>' + chips(t.missing, 'data-goto-target') : '') +
+    (f.missing.length ? '<h3>Functions</h3>' + chips(f.missing, 'data-goto-function') : '');
+  const box = document.getElementById('coverage');
+  box.style.display = '';
+
+  const card = document.getElementById('stat-doc-card');
+  if (t.missing.length) {
+    card.classList.add('has-gaps');
+    card.title = 'Show what is missing';
+    card.addEventListener('click', function () {
+      box.open = true;
+      box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
+  }
+})();
+
 if (GRAPH.nodes && GRAPH.nodes.length) {
   renderOverview(false);
   const fnBox = document.getElementById('show-functions');
@@ -901,8 +1035,8 @@ if (GRAPH.nodes && GRAPH.nodes.length) {
     fnBox.closest('.fn-toggle').style.display = 'none';
   } else {
     fnBox.addEventListener('change', function () {
-      rfClose();
-      renderOverview(fnBox.checked);
+      if (filterBox.value.trim()) applyFilter();
+      else { rfClose(); renderOverview(fnBox.checked); }
     });
   }
 
@@ -911,6 +1045,37 @@ if (GRAPH.nodes && GRAPH.nodes.length) {
   const cpBox = document.getElementById('show-critical');
   cpBox.addEventListener('change', function () {
     document.getElementById('rf-graph').classList.toggle('cp-on', cpBox.checked);
+  });
+
+  // Filter. Re-run when the functions toggle changes, because what counts as
+  // a candidate node changes with it.
+  const filterBox = document.getElementById('graph-filter');
+  const filterStatus = document.getElementById('filter-status');
+  function applyFilter() {
+    const q = filterBox.value.trim();
+    filterStatus.className = '';
+    if (!q) {
+      graphFilter = null; filterStatus.textContent = '';
+    } else {
+      const r = selectNodes(q, fnBox.checked);
+      if (!r.ids.size) {
+        filterStatus.className = 'warn';
+        filterStatus.textContent = 'nothing matches';
+        return;
+      }
+      graphFilter = r.ids;
+      filterStatus.textContent = 'showing ' + r.ids.size + ' of ' + r.total +
+        (r.unmatched.length ? ' \u00b7 no match for ' + r.unmatched.join(', ') : '');
+      if (r.unmatched.length) filterStatus.className = 'warn';
+    }
+    filterVersion++;
+    rfClose();
+    renderOverview(fnBox.checked);
+  }
+  let filterTimer = null;
+  filterBox.addEventListener('input', function () {
+    clearTimeout(filterTimer);
+    filterTimer = setTimeout(applyFilter, 250);
   });
 
   // Only offered when R found a grouping worth offering.
@@ -923,6 +1088,7 @@ if (GRAPH.nodes && GRAPH.nodes.length) {
       rfClose();
       // Functions have no group, so the two toggles are mutually exclusive.
       fnBox.disabled = grpBox.checked;
+      filterBox.disabled = grpBox.checked;
       if (grpBox.checked) renderGrouped();
       else { crumb(null); renderOverview(fnBox.checked); }
     });
@@ -937,6 +1103,12 @@ if (GRAPH.nodes && GRAPH.nodes.length) {
     if (!el) return;
     showTab('targets');
     loadPage('targets', el.getAttribute('data-goto-target'));
+  });
+  document.addEventListener('click', function (ev) {
+    const el = ev.target.closest && ev.target.closest('[data-goto-function]');
+    if (!el) return;
+    showTab('functions');
+    loadPage('functions', el.getAttribute('data-goto-function'));
   });
 } else {
   document.getElementById('rf-stage').innerHTML =
@@ -1094,6 +1266,61 @@ document.getElementById('nav-list').addEventListener('click', function (ev) {
   loadPage(key.slice(0, at), key.slice(at + 1));
 });
 
+// ---- build history on a target page ----------------------------------------
+//
+// One point per real build of this target, from history.json. The overview's
+// "since the last build" compares two snapshots; this is the long view of one
+// target: did it get slower, and when.
+function sparkline(vals, labels, fmt) {
+  const W = 260, H = 44, PAD = 5;
+  const nums = vals.filter(function (v) { return v !== null; });
+  if (nums.length < 2) return '';
+  const lo = Math.min.apply(null, nums), hi = Math.max.apply(null, nums);
+  const span = hi - lo || 1;
+  const x = function (i) { return PAD + i * (W - 2 * PAD) / (vals.length - 1); };
+  const y = function (v) { return hi === lo ? H / 2 : H - PAD - (v - lo) / span * (H - 2 * PAD); };
+
+  // Break the line where a build recorded no figure rather than drawing across.
+  let path = '', pen = false;
+  vals.forEach(function (v, i) {
+    if (v === null) { pen = false; return; }
+    path += (pen ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(v).toFixed(1);
+    pen = true;
+  });
+  const dots = vals.map(function (v, i) {
+    if (v === null) return '';
+    const last = i === vals.length - 1;
+    return '<circle cx="' + x(i).toFixed(1) + '" cy="' + y(v).toFixed(1) + '" r="' +
+      (last ? 3.5 : 2.2) + '" fill="' + (last ? '#6d28d9' : '#a78bfa') + '"><title>' +
+      rfEsc(labels[i] + ' \u00b7 ' + fmt(v)) + '</title></circle>';
+  }).join('');
+  return '<svg class="spark" width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H +
+    '" role="img"><path d="' + path + '" fill="none" stroke="#a78bfa" stroke-width="1.5"/>' +
+    dots + '</svg>';
+}
+
+function targetHistoryHtml(name) {
+  const ser = HISTORY && HISTORY.series && HISTORY.series[name];
+  if (!ser || !ser.t || ser.t.length < 2) return '';
+  // Whole seconds are plenty; the stored build time carries microseconds.
+  const when = ser.t.map(function (t) { return String(t).slice(0, 19); });
+  const row = function (label, vals, fmt) {
+    const svg = sparkline(vals, when, fmt);
+    if (!svg) return '';
+    const nums = vals.filter(function (v) { return v !== null; });
+    return '<div class="hist-row"><span class="hist-label">' + label + '</span>' + svg +
+      '<span class="hist-now">' + rfEsc(fmt(nums[nums.length - 1])) + '</span>' +
+      '<span class="hist-range">min ' + rfEsc(fmt(Math.min.apply(null, nums))) +
+      ' &middot; max ' + rfEsc(fmt(Math.max.apply(null, nums))) + '</span></div>';
+  };
+  const secs = function (v) { return fmtSecs(v) || '0 ms'; };
+  const body = row('Runtime', ser.s, secs) + row('Size', ser.b, fmtBytes);
+  if (!body) return '';
+  return '<h2>Build history</h2>' + body +
+    '<p class="graph-hint">' + ser.t.length + ' builds, ' + rfEsc(when[0]) +
+    ' to ' + rfEsc(when[when.length - 1]) + '. Hover a point for its build time.</p>';
+}
+
 function loadPage(type, name) {
   const key  = type + ':' + name;
   const page = PAGE_MAP[key];
@@ -1142,6 +1369,16 @@ function loadPage(type, name) {
       });
     }
   });
+
+  if (type === 'targets') {
+    const hist = targetHistoryHtml(name);
+    if (hist) {
+      const h = document.createElement('div');
+      h.className = 'history-section';
+      h.innerHTML = hist;
+      contentEl.appendChild(h);
+    }
+  }
 
   // Inline notes — strip stub comments, show user content if any
   const notes = page ? (page.notes || '').trim() : '';

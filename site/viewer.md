@@ -62,6 +62,24 @@ Traversal is directional — upstream follows edges backwards only — so a help
 function shared by a dozen targets does not drag the other eleven into the
 neighbourhood. Functions are counted only while **show functions** is on.
 
+### Filter the graph
+
+The box above the graph takes selectors in the style of dbt's `--select`.
+Terms are separated by spaces and combined:
+
+| Term | Shows |
+|---|---|
+| `clean` | that target |
+| `clean+` | `clean` and everything downstream of it |
+| `+report` | `report` and everything upstream of it |
+| `2+report`, `clean+1` | the same, limited to that many steps |
+| `ingest_*` | every target whose name matches |
+| `-raw_path` | removes it from the result |
+
+`clean+ -report` is "what `clean` feeds, except the report". A term that names
+nothing is reported beside the box rather than ignored, and the box is disabled
+while the graph is grouped.
+
 ## Freshness, not just errors
 
 Every target is classified `Up-to-date`, `Outdated`, `Errored` or `Not built`.
@@ -91,6 +109,23 @@ and error. Failed branches are always listed, however many branches there are.
 
 Deep links work: `viewer.html#targets:clean` opens that page directly, and
 selecting a page updates the hash.
+
+### What is missing
+
+A **Described** card on the home page counts the targets with a description.
+When any are missing, or any function has no roxygen block, the card opens a
+list of them, each a link to its page. What counts is what the reader sees: a
+description from `description =` in `_targets.R`, or one written by
+`llm = TRUE`.
+
+### Build history
+
+A target page ends with its own history once it has been built twice: runtime
+and size across its real builds, drawn as small trend lines you can hover for
+the build time. A target that was not rebuilt between two documentation runs
+adds no point, so the line shows builds rather than runs of the docs. It reads
+the same `tardoc/history.json` as *Since the last build*, keeping the last 30
+builds of each target.
 
 ## Function pages
 
