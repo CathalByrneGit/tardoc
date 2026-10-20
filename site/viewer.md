@@ -64,21 +64,14 @@ neighbourhood. Functions are counted only while **show functions** is on.
 
 ### Filter the graph
 
-The box above the graph takes selectors in the style of dbt's `--select`.
-Terms are separated by spaces and combined:
+The box above the graph filters it with selectors in the style of dbt's
+`--select`: `clean+` is a target and everything downstream, `+report` is
+everything upstream, `2+report` limits the depth, `ingest_*` is a wildcard,
+`a,b` intersects and `-name` removes. `clean+ -report` is "what `clean` feeds,
+except the report".
 
-| Term | Shows |
-|---|---|
-| `clean` | that target |
-| `clean+` | `clean` and everything downstream of it |
-| `+report` | `report` and everything upstream of it |
-| `2+report`, `clean+1` | the same, limited to that many steps |
-| `ingest_*` | every target whose name matches |
-| `-raw_path` | removes it from the result |
-
-`clean+ -report` is "what `clean` feeds, except the report". A term that names
-nothing is reported beside the box rather than ignored, and the box is disabled
-while the graph is grouped.
+The [selector guide](selectors.html) has the full grammar, recipes, and how it
+differs from dbt.
 
 ## Freshness, not just errors
 

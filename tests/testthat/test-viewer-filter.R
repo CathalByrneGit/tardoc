@@ -71,6 +71,24 @@ test_that("wildcards, exclusion and unions work", {
   expect_false("raw_path" %in% select_with_node("-raw_path")$ids)
 })
 
+test_that("commas intersect and spaces union, as in dbt", {
+  skip_if(Sys.which("node") == "", "node is not available")
+
+  # Downstream of clean AND upstream of report: the nodes on the way between.
+  expect_setequal(select_with_node("clean+,+report")$ids,
+                  c("clean", "drift_model", "station_summary", "drift_flags", "report"))
+  expect_setequal(select_with_node("+drift_flags,clean+")$ids,
+                  c("clean", "drift_model", "drift_flags"))
+  # Wildcard intersected with a chain.
+  expect_setequal(select_with_node("drift_*,+report")$ids,
+                  c("drift_model", "drift_flags"))
+  # An exclusion inside a group still applies to the whole result.
+  expect_setequal(select_with_node("clean+,-report")$ids,
+                  c("clean", "drift_model", "station_summary", "drift_flags"))
+  # Disjoint intersection is empty, not an error.
+  expect_length(select_with_node("raw_path,report")$ids, 0L)
+})
+
 test_that("a term that names nothing is reported, not silently dropped", {
   skip_if(Sys.which("node") == "", "node is not available")
   r <- select_with_node("clean nope")

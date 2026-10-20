@@ -339,6 +339,7 @@ a{color:#6d28d9;text-decoration:none}a:hover{text-decoration:underline}
       <p class="graph-hint" id="filter-bar">
         <input id="graph-filter" type="search" autocomplete="off" spellcheck="false"
                aria-label="Filter the graph"
+               title="clean+ downstream &middot; +clean upstream &middot; 2+clean limits depth &middot; ingest_* wildcard &middot; a,b intersect &middot; -name excludes"
                placeholder="Filter: clean+   +report   2+model   ingest_*   -raw_path">
         <span id="filter-status"></span>
       </p>
@@ -647,8 +648,8 @@ document.getElementById('focus-clear').addEventListener('click', clearFocus);
 
 // ---- filter ----------------------------------------------------------------
 //
-// dbt's --select, in the search-box idiom: terms are separated by spaces and
-// unioned; "+name" adds everything upstream, "name+" everything downstream,
+// dbt's --select, in the search-box idiom: terms separated by spaces are
+// unioned and terms joined by commas are intersected; "+name" adds everything upstream, "name+" everything downstream,
 // "2+name" and "name+2" limit the depth; "ingest_*" is a wildcard; a leading
 // "-" removes. It reuses reach() above, so "downstream" means the same thing
 // here as it does when you click a node.
@@ -679,7 +680,6 @@ function selectNodes(query, fnShown) {
     return fnShown || n.kind !== 'function';
   }).map(function (n) { return n.id; });
 
-  const terms = query.split(/[\s,]+/).filter(Boolean).map(parseTerm);
   const unmatched = [];
   const expand = function (t) {
     const test = nameMatcher(t.name);
@@ -694,14 +694,33 @@ function selectNodes(query, fnShown) {
     return Object.keys(out);
   };
 
-  const include = terms.filter(function (t) { return t && !t.exclude; });
-  const exclude = terms.filter(function (t) { return t && t.exclude; });
-  terms.forEach(function (t) { if (!t) unmatched.push('?'); });
-
+  // Spaces separate groups, which are unioned; commas inside a group intersect
+  // its terms -- dbt's meaning for both. Exclusions apply to the whole result
+  // wherever they appear.
+  const groups = query.trim().split(/\s+/).filter(Boolean).map(function (g) {
+    return g.split(',').filter(Boolean).map(parseTerm);
+  });
+  const bad = [];
+  const exclude = [];
   const keep = new Set();
-  if (include.length) include.forEach(function (t) { expand(t).forEach(function (id) { keep.add(id); }); });
-  else candidates.forEach(function (id) { keep.add(id); });
+  let anyInclude = false;
+  groups.forEach(function (terms) {
+    terms.forEach(function (t) { if (!t) bad.push('?'); });
+    terms = terms.filter(Boolean);
+    exclude.push.apply(exclude, terms.filter(function (t) { return t.exclude; }));
+    const inc = terms.filter(function (t) { return !t.exclude; });
+    if (!inc.length) return;
+    anyInclude = true;
+    let acc = null;
+    inc.forEach(function (t) {
+      const ids = expand(t);
+      acc = acc === null ? ids : acc.filter(function (id) { return ids.indexOf(id) >= 0; });
+    });
+    acc.forEach(function (id) { keep.add(id); });
+  });
+  if (!anyInclude) candidates.forEach(function (id) { keep.add(id); });
   exclude.forEach(function (t) { expand(t).forEach(function (id) { keep.delete(id); }); });
+  bad.forEach(function (b) { unmatched.push(b); });
   return { ids: keep, unmatched: unmatched, total: candidates.length };
 }
 
