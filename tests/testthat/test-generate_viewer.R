@@ -41,3 +41,64 @@ test_that("every external asset is version-pinned with integrity", {
     length(assets)
   )
 })
+
+# ---- documentation coverage -------------------------------------------------
+
+page <- function(name, content) list(name = name, type = "targets", content = content)
+
+test_that(".doc_coverage counts what the reader sees on a page", {
+  targets <- list(
+    page("a", "# Target: a\n\n> Has a description\n\n<!-- tardoc:generated -->"),
+    page("b", "# Target: b\n\n<!-- tardoc:generated -->\n## Details")
+  )
+  funs <- list(
+    page("f", "# Function: `f`\n\n## Documentation\n\nSomething real."),
+    page("g", paste0("# Function: `g`\n\n", .no_roxygen_msg()))
+  )
+  cov <- .doc_coverage(targets, funs)
+  expect_identical(cov$targets$total, 2L)
+  expect_identical(as.character(cov$targets$missing), "b")
+  expect_identical(as.character(cov$functions$missing), "g")
+})
+
+test_that(".doc_coverage serialises missing names as arrays even for one", {
+  cov <- .doc_coverage(list(page("b", "# Target: b\n\nno")), list())
+  json <- jsonlite::toJSON(cov, auto_unbox = TRUE)
+  expect_match(as.character(json), '"missing":["b"]', fixed = TRUE)
+  expect_match(as.character(json), '"missing":[]', fixed = TRUE)
+})
+
+# ---- per-target history -----------------------------------------------------
+
+snap <- function(...) {
+  list(recorded = "x", targets = lapply(list(...), function(t) {
+    list(name = t[[1]], status = "uptodate", last_built = t[[2]], seconds = t[[3]], bytes = t[[4]])
+  }))
+}
+
+test_that(".history_series keeps one point per real build", {
+  h <- list(
+    snap(list("a", "2026-01-01 10:00:00", 1, 100), list("b", "2026-01-01 10:00:00", 5, 9)),
+    snap(list("a", "2026-01-02 10:00:00", 2, 110), list("b", "2026-01-01 10:00:00", 5, 9)),
+    snap(list("a", "2026-01-03 10:00:00", 3, 120), list("b", "2026-01-01 10:00:00", 5, 9))
+  )
+  ser <- .history_series(h)
+  expect_length(ser$a$t, 3L)
+  expect_identical(as.numeric(ser$a$s), c(1, 2, 3))
+  # b was never rebuilt: three snapshots, one build, so no trend to draw.
+  expect_null(ser$b)
+})
+
+test_that(".history_series is NULL without a trend and caps the points", {
+  expect_null(.history_series(list()))
+  expect_null(.history_series(list(snap(list("a", "t1", 1, 1)))))
+  h <- lapply(1:10, function(i) snap(list("a", paste0("t", i), i, i)))
+  expect_length(.history_series(h, max_points = 4L)$a$t, 4L)
+})
+
+test_that("a missing runtime becomes null in the viewer payload", {
+  h <- list(snap(list("a", "t1", 1, 1)), snap(list("a", "t2", NULL, 2)))
+  json <- as.character(jsonlite::toJSON(.history_payload(h), auto_unbox = TRUE,
+                                        null = "null", na = "null"))
+  expect_match(json, '"s":[1,null]', fixed = TRUE)
+})

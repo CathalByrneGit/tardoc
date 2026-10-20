@@ -1,6 +1,7 @@
 [Home](/index.html)
 [Get started](/get-started.html)
 [The viewer](/viewer.html)
+[Selectors](/selectors.html)
 [Analytics](/analytics.html)
 [Publishing](/publishing.html)
 [Manual](/manual.html)

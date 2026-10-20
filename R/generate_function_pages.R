@@ -27,7 +27,7 @@ generate_all_function_pages <- function(cfg) {
       fun_code <- defs[[func_name]]$text
 
       docs_md <- suppressWarnings(get_fn_docs(func_name, file))
-      if (is.null(docs_md)) docs_md <- "_No roxygen documentation found._"
+      if (is.null(docs_md)) docs_md <- .no_roxygen_msg()
 
       repo_href <- .function_repo_link(func_name, file, cfg,
                                        line = defs[[func_name]]$start)
@@ -68,6 +68,11 @@ generate_all_function_pages <- function(cfg) {
   message(length(func_names), " function pages written.")
   invisible(func_names)
 }
+
+# The placeholder a function page carries when it has no roxygen block. Named
+# so the viewer's documentation-coverage count looks for the same text the page
+# writer produces, rather than a copy that could drift.
+.no_roxygen_msg <- function() "_No roxygen documentation found._"
 
 # ---- repo / line-number helpers ---------------------------------------------
 

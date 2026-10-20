@@ -20,6 +20,14 @@ Everything below was generated from the runnable example pipeline in
 `inst/examples/station-monitoring` — nothing is hand-written. The
 [live demo](example/) is that pipeline, rebuilt on every push.
 
+## An overview in your own words
+
+The home page opens with whatever you write in `tardoc/notes/index.md` —
+what the pipeline is for, who owns it, what a newcomer should read first —
+above the status counts. It is created as an empty stub on the first run and
+never overwritten, like every other note. While it is empty the home page is
+exactly as it was.
+
 ## The pipeline graph
 
 The home page opens on the whole pipeline: drag to pan, scroll to zoom, a
@@ -41,6 +49,29 @@ exposes, and where the branching fields come from. The generated `.md` files
 still carry a `mermaid` fence so they render on GitHub and anywhere else markdown
 is read; the viewer replaces that fence with a live graph built from the same
 data.
+
+### Follow a chain
+
+Clicking a node also fades everything outside its neighbourhood, so *what does
+this feed, and what feeds it?* is answered at a glance rather than by tracing
+edges. A bar above the graph sets the direction (upstream, downstream or both)
+and the depth (1, 2, 3 or all), and counts what is lit. Clicking the empty
+canvas, or **clear focus**, puts the graph back.
+
+Traversal is directional — upstream follows edges backwards only — so a helper
+function shared by a dozen targets does not drag the other eleven into the
+neighbourhood. Functions are counted only while **show functions** is on.
+
+### Filter the graph
+
+The box above the graph filters it with selectors in the style of dbt's
+`--select`: `clean+` is a target and everything downstream, `+report` is
+everything upstream, `2+report` limits the depth, `ingest_*` is a wildcard,
+`a,b` intersects and `-name` removes. `clean+ -report` is "what `clean` feeds,
+except the report".
+
+The [selector guide](selectors.html) has the full grammar, recipes, and how it
+differs from dbt.
 
 ## Freshness, not just errors
 
@@ -71,6 +102,23 @@ and error. Failed branches are always listed, however many branches there are.
 
 Deep links work: `viewer.html#targets:clean` opens that page directly, and
 selecting a page updates the hash.
+
+### What is missing
+
+A **Described** card on the home page counts the targets with a description.
+When any are missing, or any function has no roxygen block, the card opens a
+list of them, each a link to its page. What counts is what the reader sees: a
+description from `description =` in `_targets.R`, or one written by
+`llm = TRUE`.
+
+### Build history
+
+A target page ends with its own history once it has been built twice: runtime
+and size across its real builds, drawn as small trend lines you can hover for
+the build time. A target that was not rebuilt between two documentation runs
+adds no point, so the line shows builds rather than runs of the docs. It reads
+the same `tardoc/history.json` as *Since the last build*, keeping the last 30
+builds of each target.
 
 ## Function pages
 

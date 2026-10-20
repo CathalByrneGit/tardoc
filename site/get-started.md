@@ -58,6 +58,7 @@ my_project/
     ├── functions/
     │   └── clean_raw.md         one .md per function
     └── notes/
+        ├── index.md                 yours — the home-page overview
         ├── targets/clean_data.md    yours — never overwritten
         └── functions/clean_raw.md
 ```

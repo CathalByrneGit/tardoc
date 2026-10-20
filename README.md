@@ -63,6 +63,8 @@ Full documentation is at
   install, what gets written, and whether you need a store
 - [The viewer](https://cathalbyrnegit.github.io/tardoc/viewer.html) — every page
   of it, and how the sidebar and graph behave at 420 targets
+- [Selector guide](https://cathalbyrnegit.github.io/tardoc/selectors.html) — filter
+  the graph the way you would in dbt: `clean+`, `+report`, `ingest_*`
 - [Analytics, chat and MCP](https://cathalbyrnegit.github.io/tardoc/analytics.html)
   — SQL, semantic search, the chat tab, the MCP server
 - [Publishing](https://cathalbyrnegit.github.io/tardoc/publishing.html) —
