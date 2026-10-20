@@ -54,6 +54,11 @@ generate_viewer <- function(targets_data, function_names, cfg,
   html <- gsub("{{PKG_NAME_JSON}}", jsonlite::toJSON(pkg_name, auto_unbox = TRUE), html, fixed = TRUE)
   html <- gsub("{{PAGES_JSON}}",    pages_json,                                   html, fixed = TRUE)
   html <- gsub("{{INDEX_JSON}}",    index_json,                                   html, fixed = TRUE)
+  html <- gsub("{{OVERVIEW_JSON}}",
+               gsub("</script>", "<\\/script>",
+                    jsonlite::toJSON(read_overview(cfg), auto_unbox = TRUE),
+                    fixed = TRUE),
+               html, fixed = TRUE)
 
   # Pipeline overview graph. Positions are computed here because React Flow
   # does no layout of its own.

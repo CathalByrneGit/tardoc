@@ -20,6 +20,14 @@ Everything below was generated from the runnable example pipeline in
 `inst/examples/station-monitoring` — nothing is hand-written. The
 [live demo](example/) is that pipeline, rebuilt on every push.
 
+## An overview in your own words
+
+The home page opens with whatever you write in `tardoc/notes/index.md` —
+what the pipeline is for, who owns it, what a newcomer should read first —
+above the status counts. It is created as an empty stub on the first run and
+never overwritten, like every other note. While it is empty the home page is
+exactly as it was.
+
 ## The pipeline graph
 
 The home page opens on the whole pipeline: drag to pan, scroll to zoom, a
@@ -41,6 +49,18 @@ exposes, and where the branching fields come from. The generated `.md` files
 still carry a `mermaid` fence so they render on GitHub and anywhere else markdown
 is read; the viewer replaces that fence with a live graph built from the same
 data.
+
+### Follow a chain
+
+Clicking a node also fades everything outside its neighbourhood, so *what does
+this feed, and what feeds it?* is answered at a glance rather than by tracing
+edges. A bar above the graph sets the direction (upstream, downstream or both)
+and the depth (1, 2, 3 or all), and counts what is lit. Clicking the empty
+canvas, or **clear focus**, puts the graph back.
+
+Traversal is directional — upstream follows edges backwards only — so a helper
+function shared by a dozen targets does not drag the other eleven into the
+neighbourhood. Functions are counted only while **show functions** is on.
 
 ## Freshness, not just errors
 

@@ -52,3 +52,49 @@ test_that("read_note works for functions", {
   writeLines("Function notes.", file.path(cfg$notes_functions, "my_fn.md"))
   expect_match(read_note("my_fn", "functions", cfg), "Function notes.")
 })
+
+test_that("generate_notes creates a project overview stub", {
+  tmp <- withr::local_tempdir(); cfg <- mock_cfg(tmp); setup_site_dirs(cfg)
+  generate_notes("a", character(), cfg)
+  expect_true(file.exists(file.path(cfg$notes_dir, "index.md")))
+})
+
+test_that("the overview stub reads as empty, so the home page is unchanged", {
+  tmp <- withr::local_tempdir(); cfg <- mock_cfg(tmp); setup_site_dirs(cfg)
+  generate_notes("a", character(), cfg)
+  # The stub is comments only; the viewer strips them, but R must not have
+  # decided it is content in the meantime.
+  stripped <- gsub("(?s)<!--.*?-->", "", read_overview(cfg), perl = TRUE)
+  expect_identical(trimws(stripped), "")
+})
+
+test_that("generate_notes never overwrites the project overview", {
+  tmp <- withr::local_tempdir(); cfg <- mock_cfg(tmp); setup_site_dirs(cfg)
+  writeLines("Owned by Field Ops.", file.path(cfg$notes_dir, "index.md"))
+  generate_notes("a", character(), cfg)
+  expect_match(read_overview(cfg), "Owned by Field Ops.", fixed = TRUE)
+})
+
+test_that("read_overview is empty when there is no file", {
+  tmp <- withr::local_tempdir(); cfg <- mock_cfg(tmp); setup_site_dirs(cfg)
+  expect_identical(read_overview(cfg), "")
+})
+
+test_that("the overview reaches the generated viewer", {
+  tmp <- withr::local_tempdir(); cfg <- mock_cfg(tmp); setup_site_dirs(cfg)
+  writeLines("Weekly station health check.", file.path(cfg$notes_dir, "index.md"))
+  suppressMessages(generate_viewer(mock_targets_data(), character(), cfg, "Test"))
+  html <- paste(readLines(file.path(cfg$site_path, "viewer.html"), warn = FALSE),
+                collapse = "\n")
+  expect_match(html, "const OVERVIEW = \"Weekly station health check.\"", fixed = TRUE)
+})
+
+test_that("an overview cannot close the script tag it is embedded in", {
+  tmp <- withr::local_tempdir(); cfg <- mock_cfg(tmp); setup_site_dirs(cfg)
+  writeLines("</script><b>x</b>", file.path(cfg$notes_dir, "index.md"))
+  suppressMessages(generate_viewer(mock_targets_data(), character(), cfg, "Test"))
+  html <- paste(readLines(file.path(cfg$site_path, "viewer.html"), warn = FALSE),
+                collapse = "\n")
+  line <- regmatches(html, regexpr("const OVERVIEW = [^\n]*", html))
+  expect_false(grepl("</script>", line, fixed = TRUE))
+})

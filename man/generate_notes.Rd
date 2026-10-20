@@ -25,6 +25,8 @@ entirely user-owned.
 \details{
 Note files live at:
 \itemize{
+\item \code{tardoc/notes/index.md} -- the project overview, shown on the viewer's
+home page under the title
 \item \code{tardoc/notes/targets/TARGET_NAME.md}
 \item \code{tardoc/notes/functions/FUNCTION_NAME.md}
 }
