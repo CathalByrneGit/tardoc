@@ -30,7 +30,7 @@ moxygenise_file <- function(file, manpath) {
 #' @return A markdown string, or `NULL` (with a warning) if not found.
 #' @export
 get_fn_docs <- function(fn_name, file) {
-  rd_codes <- .file_to_rd(normalizePath(file, mustWork = TRUE))
+  rd_codes <- .file_to_rd_cached(normalizePath(file, mustWork = TRUE))
 
   target <- paste0(fn_name, ".Rd")
   if (!target %in% names(rd_codes)) {
@@ -55,6 +55,22 @@ get_fn_docs <- function(fn_name, file) {
 .list_r_files <- function(path) {
   path <- normalizePath(path, mustWork = TRUE)
   file.path(path, list.files(path, pattern = "\\.R$", recursive = TRUE))
+}
+
+# Rd for a file's roxygen blocks costs a full roxygen parse, and every
+# function in the file asked for it again -- three times each in a normal run
+# (function page, search index, analytics), so 60 functions in one file took
+# 89 seconds. Keyed on the file's content, so an edit is never served stale.
+.rd_cache <- new.env(parent = emptyenv())
+
+.file_to_rd_cached <- function(file) {
+  key <- paste(file, unname(tools::md5sum(file)))
+  hit <- .rd_cache[[key]]
+  if (is.null(hit)) {
+    hit <- .file_to_rd(file)
+    assign(key, hit, envir = .rd_cache)
+  }
+  hit
 }
 
 .file_to_rd <- function(file) {

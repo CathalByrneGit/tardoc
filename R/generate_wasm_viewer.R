@@ -26,7 +26,7 @@ generate_wasm_viewer <- function(analytics_data, cfg, pkg_name = "targets docs")
   data_json <- gsub("</script>", "<\\/script>", data_json, fixed = TRUE)
 
   html <- tpl
-  html <- gsub("{{PKG_NAME}}",      pkg_name,                                     html, fixed = TRUE)
+  html <- gsub("{{PKG_NAME}}",      .html_escape(pkg_name),                                     html, fixed = TRUE)
   html <- gsub("{{PKG_NAME_JSON}}", jsonlite::toJSON(pkg_name, auto_unbox = TRUE), html, fixed = TRUE)
   html <- gsub("{{ANALYTICS_DATA}}", data_json,                                   html, fixed = TRUE)
 

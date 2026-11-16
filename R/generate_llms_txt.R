@@ -72,14 +72,13 @@ generate_llms_txt <- function(targets_data,
 }
 
 .llms_functions_section <- function(cfg) {
-  r_files <- list.files(cfg$r_scripts_dir, pattern = "\\.R$", full.names = TRUE)
+  r_files <- .function_r_files(cfg)
   lines   <- "## Functions\n\n"
 
   for (file in r_files) {
-    func_env <- new.env(parent = globalenv())  # globalenv so base functions like <- are available
-    source(file, local = func_env)
-
-    for (func_name in ls(func_env)) {
+    # Parsed, not sourced: sourcing ran the user's top-level code and a single
+    # failing file aborted the whole llms.txt.
+    for (func_name in .file_defines(file)) {
       # suppressWarnings: NULL return for undocumented functions is expected
       docs <- suppressWarnings(get_fn_docs(func_name, file))
 

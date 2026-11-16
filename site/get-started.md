@@ -41,6 +41,17 @@ Useful arguments:
 The full argument list, for every exported function, is on the
 [manual page](manual.html).
 
+## Which files it reads
+
+Functions are read from everything under `R/`, subfolders included — the same
+files `tar_source("R")` loads — as `.R` or `.r`. A project that keeps
+`R/ingest/read.R` gets pages for those functions too.
+
+Reading a function's roxygen docs runs the file once (roxygen2 builds an
+environment by sourcing it), so top-level code in `R/` executes during
+`document_targets()`. Keep side effects out of `R/`, as you would for
+`tar_source()` anyway.
+
 ## What it writes
 
 ```

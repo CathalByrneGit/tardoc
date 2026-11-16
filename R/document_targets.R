@@ -455,29 +455,23 @@ serve_tardoc_mcp <- function(project_path = ".", site_dir = "tardoc", port = 876
 #' @keywords internal
 .build_analytics_data <- function(targets_data, function_names, cfg) {
   target_rows <- lapply(targets_data$target_names, function(tn) {
-    manifest_row <- dplyr::filter(targets_data$manifest, .data$name == tn)
-    meta_row     <- dplyr::filter(targets_data$meta,     .data$name == tn)
-    dep          <- get_target_network_dependencies(
+    dep <- get_target_network_dependencies(
       tn, targets_data$network, max_depth_up = 1, max_depth_down = 1
     )
-    desc       <- .ad_pull_desc(manifest_row)
-    command    <- dplyr::pull(manifest_row, "command")
-    status     <- .target_status(tn, targets_data$meta, targets_data$outdated,
-                                isTRUE(targets_data$has_store))
-    last_built <- as.character(meta_row$time)
+    b <- .target_basics(tn, targets_data)
     list(
-      name = tn, description = if (is.na(desc)) "" else desc,
-      command = command, status = status,
-      last_built = if (is.na(last_built)) "" else last_built,
+      name = tn, description = b$description,
+      command = b$command, status = b$status,
+      last_built = b$last_built,
       n_upstream = length(dep$upstream), n_downstream = length(dep$downstream),
       notes = read_note(tn, "targets", cfg),
       upstream = as.list(dep$upstream), downstream = as.list(dep$downstream)
     )
   })
 
-  r_files <- list.files(cfg$r_scripts_dir, pattern = "\\.R$", full.names = TRUE)
+  r_files <- .function_r_files(cfg)
   func_rows <- lapply(function_names, function(fn) {
-    src  <- .ad_find_src(fn, r_files)
+    src  <- .find_function_file(fn, r_files)
     docs <- if (!is.null(src)) suppressWarnings(get_fn_docs(fn, src)) else NULL
     list(name = fn, description = if (!is.null(docs)) .ad_extract_desc(docs) else "",
          source_file = if (!is.null(src)) basename(src) else "",
@@ -545,19 +539,6 @@ serve_tardoc_mcp <- function(project_path = ".", site_dir = "tardoc", port = 876
   chat$register_tool(sql_tool)
 }
 
-.ad_pull_desc <- function(r) {
-  if (!"description" %in% names(r)) return(NA_character_)
-  v <- dplyr::pull(r, "description")
-  if (length(v) == 0 || is.na(v) || nchar(trimws(v)) == 0) NA_character_ else v
-}
-.ad_find_src <- function(fn, r_files) {
-  for (f in r_files) {
-    e <- new.env(parent = globalenv())
-    tryCatch(source(f, local = e), error = function(e) NULL)
-    if (fn %in% ls(e)) return(f)
-  }
-  NULL
-}
 .ad_extract_desc <- function(docs) {
   lines <- strsplit(docs, "\n")[[1]]
   in_d  <- FALSE; dl <- character()

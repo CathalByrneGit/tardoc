@@ -66,17 +66,18 @@ generate_llm_content <- function(targets_data, function_names, cfg,
     }
   }
 
-  r_files <- list.files(cfg$r_scripts_dir, pattern = "\\.R$", full.names = TRUE)
+  r_files <- .function_r_files(cfg)
   message("  Generating function explanations (", length(function_names), ")...")
   ch_fn <- make_chat("You write 2-3 sentence plain-English explanations for R functions: what it does, key inputs, what it returns.")
   explained <- 0L
   for (fn in function_names) {
-    src <- .find_fn_file(fn, r_files)
+    src <- .find_function_file(fn, r_files)
     if (is.null(src)) next
-    env <- new.env(parent = globalenv())
-    tryCatch(source(src, local = env), error = function(e) NULL)
-    if (!fn %in% ls(env)) next
-    code <- paste(deparse(get(fn, env)), collapse = "\n")
+    # The verbatim source, comments included -- deparse() discards every
+    # comment, which are often the best explanation of what a function is for,
+    # and sourcing the file executed the user's top-level code to get at it.
+    code <- .file_functions(src)[[fn]]$text
+    if (is.null(code)) next
     docs <- suppressWarnings(get_fn_docs(fn, src))
     expl <- tryCatch(trimws(ch_fn$chat(.fn_explanation_prompt(fn, code, docs), echo = FALSE)),
                      error = function(e) { message("    [skip] ", fn, ": ", conditionMessage(e)); NULL })
@@ -124,12 +125,26 @@ generate_llm_content <- function(targets_data, function_names, cfg,
 
 .inject_description <- function(path, name, desc) {
   if (!file.exists(path)) return(invisible(NULL))
-  content <- paste(readLines(path, warn = FALSE), collapse = "\n")
-  if (!grepl(paste0("# Target: ", name), content, fixed = TRUE)) return(invisible(NULL))
-  content <- gsub("\n> [^\n]+\n", "\n", content)
-  content <- sub(paste0("(# Target: ", name, "\n)"),
-                 paste0("\\1\n> ", desc, "\n"), content)
-  writeLines(content, path)
+  lines <- readLines(path, warn = FALSE)
+  title <- which(lines == paste0("# Target: ", name))
+  if (!length(title)) return(invisible(NULL))
+  title <- title[1]
+
+  # Only the header is ours to rewrite: the lines between the title and the
+  # first marker. The old version removed every blockquote in the file, which
+  # deleted quotations the user had written in their own notes below.
+  marker <- which(lines == "<!-- tardoc:generated -->")
+  stop_at <- if (length(marker)) marker[1] - 1L else length(lines)
+  head <- seq_len(stop_at)
+  head <- head[head > title]
+  old  <- head[startsWith(lines[head], "> ")]
+  drop <- c(old, old + 1L)               # the quote and the blank line after it
+  drop <- drop[drop <= stop_at & !(drop %in% seq_len(title))]
+  if (length(drop)) lines <- lines[-drop]
+
+  lines <- append(lines, c("", paste0("> ", gsub("[[:space:]]+", " ", desc))),
+                  after = title)
+  writeLines(lines, path)
 }
 
 .inject_explanation <- function(path, explanation) {
@@ -168,13 +183,5 @@ generate_llm_content <- function(targets_data, function_names, cfg,
   length(v) > 0 && !is.na(v) && nchar(trimws(v)) > 0
 }
 
-.find_fn_file <- function(fn, r_files) {
-  for (f in r_files) {
-    e <- new.env(parent = globalenv())
-    tryCatch(source(f, local = e), error = function(e) NULL)
-    if (fn %in% ls(e)) return(f)
-  }
-  NULL
-}
 
 `%||%` <- function(x, y) if (is.null(x)) y else x
