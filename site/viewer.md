@@ -189,6 +189,12 @@ targets where `description = ""` and for every function page, and the results ar
 written back into the `.md` files inside the generated block — so they are
 reviewable in a diff, and editable.
 
+Nothing is paid for twice. A target already described on its page keeps that
+description, and a function's explanation is cached (in `llm_cache.json`, beside
+the docs) and reused while its source and docs are unchanged. Descriptions the
+model wrote reach the search index, graph panel, `llms.txt` and analytics too,
+not only the page. `llm_refresh = TRUE` regenerates everything.
+
 ## On large pipelines
 
 Checked against a synthetic pipeline of **420 targets and 120 functions**.

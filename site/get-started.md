@@ -35,21 +35,32 @@ Useful arguments:
 | `pkg_desc` | `""` | Description for `llms.txt` |
 | `repo_url` | `NULL` | Repo base URL for source links, e.g. `"https://github.com/user/repo/blob/main/"` |
 | `group_by` | `"auto"` | Grouping signal for the graph — see [Grouping the graph](viewer.html#sec:grouping-the-graph) |
+| `code_dirs` | `NULL` | Where your function code lives, if not `R/` — see below |
 | `check_outdated` | `TRUE` | Run `tar_outdated()` for freshness status |
 | `llm` | `FALSE` | Auto-generate missing descriptions and function explanations |
+| `llm_refresh` | `FALSE` | With `llm = TRUE`, regenerate everything instead of keeping earlier results |
 
 The full argument list, for every exported function, is on the
 [manual page](manual.html).
 
 ## Which files it reads
 
-Functions are read from everything under `R/`, subfolders included — the same
-files `tar_source("R")` loads — as `.R` or `.r`. A project that keeps
-`R/ingest/read.R` gets pages for those functions too.
+Function code is read from the places `_targets.R` loads it from: tardoc looks
+at your `tar_source()` calls, so `tar_source("code")` or
+`tar_source(c("src", "helpers.R"))` is enough, and with none it uses `R/`.
+Directories are searched recursively, and only `.R` and `.r` files are read.
+Only literal paths are understood — `tar_source(Sys.getenv("X"))` is skipped, and
+`_targets.R` is parsed, never run.
+
+To say it explicitly, or when `_targets.R` does not call `tar_source()`:
+
+```r
+document_targets(code_dirs = c("analysis/functions", "analysis/helpers.R"))
+```
 
 Reading a function's roxygen docs runs the file once (roxygen2 builds an
-environment by sourcing it), so top-level code in `R/` executes during
-`document_targets()`. Keep side effects out of `R/`, as you would for
+environment by sourcing it), so top-level code in those files executes during
+`document_targets()`. Keep side effects out of them, as you would for
 `tar_source()` anyway.
 
 ## What it writes

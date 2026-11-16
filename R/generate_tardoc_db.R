@@ -194,7 +194,7 @@ generate_tardoc_db <- function(targets_data, function_names, cfg,
   func_rows <- lapply(function_names, function(fn) {
     src  <- .find_function_file(fn, r_files)
     docs <- if (!is.null(src)) suppressWarnings(get_fn_docs(fn, src)) else NULL
-    desc <- if (!is.null(docs)) .extract_desc_db(docs) else ""
+    desc <- if (!is.null(docs)) .docs_description(docs) else ""
     data.frame(name = fn, description = desc,
                source_file = if (!is.null(src)) basename(src) else "",
                notes = read_note(fn, "functions", cfg),
@@ -232,15 +232,6 @@ generate_tardoc_db <- function(targets_data, function_names, cfg,
   invisible(out)
 }
 
-.extract_desc_db <- function(docs_md) {
-  lines <- strsplit(docs_md, "\n")[[1]]
-  in_d  <- FALSE; dl <- character()
-  for (l in lines) {
-    if (grepl("^##\\s+Description", l, ignore.case = TRUE)) { in_d <- TRUE; next }
-    if (in_d) { if (grepl("^##", l)) break; dl <- c(dl, l) }
-  }
-  trimws(paste(dl, collapse = "\n"))
-}
 
 # Embedding width produced by quackformers' embed(); embed_jina() is 768.
 .embedding_dim <- 384L

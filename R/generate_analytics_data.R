@@ -43,7 +43,7 @@ generate_analytics_data <- function(targets_data, function_names, cfg) {
   function_rows <- lapply(function_names, function(fn_name) {
     src_file   <- .find_function_file(fn_name, r_files)
     docs       <- if (!is.null(src_file)) suppressWarnings(get_fn_docs(fn_name, src_file)) else NULL
-    short_desc <- if (!is.null(docs)) .extract_desc(docs) else ""
+    short_desc <- if (!is.null(docs)) .docs_description(docs) else ""
 
     list(
       name        = fn_name,
@@ -76,19 +76,3 @@ generate_analytics_data <- function(targets_data, function_names, cfg) {
 }
 
 # ---- private ----------------------------------------------------------------
-
-.extract_desc <- function(docs_md) {
-  lines      <- strsplit(docs_md, "\n")[[1]]
-  in_desc    <- FALSE
-  desc_lines <- character()
-  for (line in lines) {
-    if (grepl("^##\\s+Description", line, ignore.case = TRUE)) {
-      in_desc <- TRUE; next
-    }
-    if (in_desc) {
-      if (grepl("^##", line)) break
-      desc_lines <- c(desc_lines, line)
-    }
-  }
-  trimws(paste(desc_lines, collapse = "\n"))
-}

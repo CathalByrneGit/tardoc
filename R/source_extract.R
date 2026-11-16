@@ -20,17 +20,26 @@
 
 #' The R files holding a project's functions
 #'
-#' Everything under `R/`, subfolders included. `tar_source("R")` -- the
-#' idiom in nearly every `_targets.R` -- loads files recursively, so a project
-#' that keeps `R/ingest/read.R` has those functions in its pipeline; listing
-#' only `R/*.R` left them out of the documentation without a word.
+#' Everything under the project's code locations (`cfg$r_scripts_dir`: by
+#' default what `_targets.R` passes to `tar_source()`, else `R/`), subfolders
+#' included. `tar_source()` loads files recursively, so a project that keeps
+#' `R/ingest/read.R` has those functions in its pipeline; listing only `R/*.R`
+#' left them out of the documentation without a word.
 #'
 #' @param cfg A site config list.
 #' @return A sorted character vector of paths, possibly empty.
 #' @keywords internal
 .function_r_files <- function(cfg) {
-  sort(list.files(cfg$r_scripts_dir, pattern = "\\.[Rr]$",
-                  recursive = TRUE, full.names = TRUE))
+  one <- function(p) {
+    if (dir.exists(p)) {
+      list.files(p, pattern = "\\.[Rr]$", recursive = TRUE, full.names = TRUE)
+    } else if (file.exists(p) && grepl("\\.[Rr]$", p)) {
+      p
+    } else {
+      character()
+    }
+  }
+  sort(unique(unlist(lapply(cfg$r_scripts_dir, one))))
 }
 
 #' Every function defined at the top level of an R file

@@ -172,3 +172,46 @@ test_that("llms.txt lists functions without running the project's top-level code
   expect_false(file.exists(marker))
   expect_match(paste(readLines(file.path(tmp, "llms.txt")), collapse = "\n"), "`add`", fixed = TRUE)
 })
+
+# ---- descriptions an LLM wrote reach every output ---------------------------
+
+test_that("a description on a page is folded into the data the outputs read", {
+  tmp <- withr::local_tempdir(); cfg <- cfg_for(tmp)
+  td <- mock_targets_data()
+  suppressMessages(generate_all_target_pages(td, cfg))
+  .inject_description(file.path(cfg$targets_dir, "model_fit.md"), "model_fit", "Fits the model.")
+  merged <- .merge_page_descriptions(td, cfg)
+  expect_identical(merged$manifest$description[merged$manifest$name == "model_fit"], "Fits the model.")
+  # The pipeline's own description is never replaced by a page's.
+  expect_identical(merged$manifest$description[merged$manifest$name == "raw_data"], "Raw sensor readings")
+})
+
+test_that("the search index carries a description that only the page had", {
+  tmp <- withr::local_tempdir(); cfg <- cfg_for(tmp)
+  td <- mock_targets_data()
+  suppressMessages(generate_all_target_pages(td, cfg))
+  .inject_description(file.path(cfg$targets_dir, "model_fit.md"), "model_fit", "Fits the model.")
+  td <- .merge_page_descriptions(td, cfg)
+  suppressMessages(generate_search_index(td, character(), cfg))
+  idx <- jsonlite::fromJSON(file.path(cfg$site_path, "search_index.json"), simplifyVector = FALSE)
+  d <- vapply(idx$targets, function(t) t$description, "")
+  names(d) <- vapply(idx$targets, `[[`, "", "name")
+  expect_identical(d[["model_fit"]], "Fits the model.")
+})
+
+test_that("document_targets builds the LLM pass before the outputs that read descriptions", {
+  src <- paste(deparse(document_targets), collapse = "\n")
+  pos <- function(x) regexpr(x, src, fixed = TRUE)[1]
+  expect_lt(pos("generate_llm_content("), pos("generate_search_index("))
+  expect_lt(pos(".merge_page_descriptions("), pos("generate_search_index("))
+  expect_lt(pos(".merge_page_descriptions("), pos("generate_llms_txt("))
+})
+
+# ---- one description extractor -----------------------------------------------
+
+test_that(".docs_description reads the Description section and nothing else", {
+  md <- "# T\n\n## Description\n\nDoes a thing.\nOver two lines.\n\n## Arguments\n\n* `x`: y"
+  expect_identical(.docs_description(md), "Does a thing.\nOver two lines.")
+  expect_identical(.docs_description("# T\n\n## Value\n\nv"), "")
+  expect_identical(.extract_description("# T\n\n## Value\n\nv"), "_No description._")
+})

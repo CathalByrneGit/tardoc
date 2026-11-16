@@ -63,6 +63,11 @@ tardoc::view_tardoc_db()
 sources, if `tardoc/tardoc.duckdb` is not already there. Later calls reuse it;
 `db_extensions = TRUE` rebuilds with the community extensions.
 
+`view_tardoc_db()` rebuilds `tardoc.duckdb` when `document_targets()` has been
+run since the database was built, so the analytics never silently describe an
+older pipeline; a database built with the community extensions is rebuilt with
+them.
+
 Then two local services start:
 
 - A **DuckDB Quack server** (`callr::r_bg()`) serving the database on port 9494.
@@ -70,6 +75,12 @@ Then two local services start:
   [Quack protocol](https://duckdb.org/2026/05/12/quack-remote-protocol) and runs
   every query server-side.
 - A minimal **httpuv** server on port 9000 delivering the session HTML.
+
+Both listen on `127.0.0.1`, so only your own machine can reach them. The chat
+endpoint answers with your LLM credentials and the server reads files from the
+docs folder, so it refuses requests from any page it did not serve itself and
+never serves a path that leaves the folder. To let others on a trusted network
+in, pass `host = "0.0.0.0"` deliberately.
 
 `view_tardoc_db()` waits for the Quack port to accept a connection before handing
 the page over — typically a few seconds, most of it the one-off extension
@@ -186,3 +197,7 @@ from the model's context window.
 `tardoc/tardoc.duckdb` and the `tardoc/tardoc_mcp_config.json` written beside it,
 and both come from `view_tardoc_db(db_extensions = TRUE)` — neither is produced by
 `document_targets()`.
+
+The MCP server also listens on `127.0.0.1` only; `serve_tardoc_mcp(host = ...)`
+changes that, with the same caution — the database holds your pipeline's code
+and notes.

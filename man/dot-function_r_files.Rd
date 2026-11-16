@@ -13,9 +13,10 @@
 A sorted character vector of paths, possibly empty.
 }
 \description{
-Everything under \verb{R/}, subfolders included. \code{tar_source("R")} -- the
-idiom in nearly every \verb{_targets.R} -- loads files recursively, so a project
-that keeps \code{R/ingest/read.R} has those functions in its pipeline; listing
-only \verb{R/*.R} left them out of the documentation without a word.
+Everything under the project's code locations (\code{cfg$r_scripts_dir}: by
+default what \verb{_targets.R} passes to \code{tar_source()}, else \verb{R/}), subfolders
+included. \code{tar_source()} loads files recursively, so a project that keeps
+\code{R/ingest/read.R} has those functions in its pipeline; listing only \verb{R/*.R}
+left them out of the documentation without a word.
 }
 \keyword{internal}

@@ -4,7 +4,12 @@
 \alias{serve_tardoc_mcp}
 \title{Expose the tardoc database as an MCP server for Claude Desktop / Claude Code}
 \usage{
-serve_tardoc_mcp(project_path = ".", site_dir = "tardoc", port = 8765)
+serve_tardoc_mcp(
+  project_path = ".",
+  site_dir = "tardoc",
+  port = 8765,
+  host = "127.0.0.1"
+)
 }
 \arguments{
 \item{project_path}{Path to the targets project root.}
@@ -12,6 +17,9 @@ serve_tardoc_mcp(project_path = ".", site_dir = "tardoc", port = 8765)
 \item{site_dir}{Subfolder used in \code{\link[=document_targets]{document_targets()}}.}
 
 \item{port}{MCP server port. Default \code{8765}.}
+
+\item{host}{Address to listen on. Default \code{"127.0.0.1"}: only this
+machine. The database it exposes holds your pipeline's code and notes.}
 }
 \description{
 Starts the DuckDB \code{duckdb_mcp} extension server, making \code{tardoc.duckdb}
