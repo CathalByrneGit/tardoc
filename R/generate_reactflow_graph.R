@@ -33,7 +33,7 @@ generate_reactflow_graph <- function(targets_data, cfg,
   # Escaped so the embedded JSON cannot terminate the script element early.
   json <- gsub("</script>", "<\\/script>", json, fixed = TRUE)
 
-  html <- gsub("{{PKG_NAME}}",   pkg_name, tpl,  fixed = TRUE)
+  html <- gsub("{{PKG_NAME}}",   .html_escape(pkg_name), tpl,  fixed = TRUE)
   html <- gsub("{{GRAPH_JSON}}", json,     html, fixed = TRUE)
 
   out <- file.path(cfg$site_path, "reactflow_graph.html")

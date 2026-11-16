@@ -18,7 +18,7 @@
 #' @export
 generate_analytics_viewer <- function(cfg, pkg_name = "targets docs") {
   tpl  <- .load_template("analytics.html")
-  html <- gsub("{{PKG_NAME}}", pkg_name, tpl, fixed = TRUE)
+  html <- gsub("{{PKG_NAME}}", .html_escape(pkg_name), tpl, fixed = TRUE)
 
   out_path <- file.path(cfg$site_path, "analytics.html")
   writeLines(html, out_path, useBytes = TRUE)

@@ -10,7 +10,7 @@
 #' @return A character vector of function names, invisibly.
 #' @export
 generate_all_function_pages <- function(cfg) {
-  r_files    <- list.files(cfg$r_scripts_dir, pattern = "\\.R$", full.names = TRUE)
+  r_files    <- .function_r_files(cfg)
   func_names <- character()
 
   for (file in r_files) {
@@ -18,7 +18,9 @@ generate_all_function_pages <- function(cfg) {
     # be a regex for discovery plus a source() and deparse() for the body:
     # the regex only matched `name <- function` at column one, and deparse
     # showed R's reconstruction of the parsed object, which has had every
-    # comment stripped out of it. Parsing also means no user code is run.
+    # comment stripped out of it. This read does not execute the file; the
+    # roxygen pass in get_fn_docs() below still does (roxygen2 builds an
+    # environment by sourcing it), so top-level code in R/ runs once per file.
     defs <- .file_functions(file)
 
     for (func_name in names(defs)) {
@@ -96,7 +98,15 @@ generate_all_function_pages <- function(cfg) {
 #' @keywords internal
 .function_repo_link <- function(func_name, r_file, cfg, line = NULL) {
   if (is.null(cfg$repo_url)) return(NULL)
-  rel  <- paste0("R/", basename(r_file))
+  # Relative to the project, not "R/<basename>": a function in R/ingest/read.R
+  # linked to a file that does not exist.
+  proj <- sub("/+$", "", cfg$project_path)
+  rf   <- normalizePath(r_file, winslash = "/", mustWork = FALSE)
+  rel  <- if (startsWith(rf, paste0(proj, "/"))) {
+    substring(rf, nchar(proj) + 2L)
+  } else {
+    paste0("R/", basename(r_file))
+  }
   # The parsed start line is exact; the regex only finds column-one
   # definitions, so it is the fallback rather than the first choice.
   if (is.null(line)) line <- .find_function_line(func_name, r_file)

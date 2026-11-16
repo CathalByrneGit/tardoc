@@ -50,7 +50,7 @@ generate_viewer <- function(targets_data, function_names, cfg,
   else "{}"
 
   html <- tpl
-  html <- gsub("{{PKG_NAME}}",      pkg_name,                                     html, fixed = TRUE)
+  html <- gsub("{{PKG_NAME}}",      .html_escape(pkg_name),                                     html, fixed = TRUE)
   html <- gsub("{{PKG_NAME_JSON}}", jsonlite::toJSON(pkg_name, auto_unbox = TRUE), html, fixed = TRUE)
   html <- gsub("{{PAGES_JSON}}",    pages_json,                                   html, fixed = TRUE)
   html <- gsub("{{INDEX_JSON}}",    index_json,                                   html, fixed = TRUE)
@@ -105,6 +105,21 @@ generate_viewer <- function(targets_data, function_names, cfg,
 }
 
 # ---- private ----------------------------------------------------------------
+
+#' Escape text for HTML
+#'
+#' The project title is put into `<title>` and headings as-is, so a name like
+#' `"Sales <Q3> & returns"` broke the markup of every page it appeared on.
+#'
+#' @param x Character vector.
+#' @return `x` with `&`, `<`, `>` and `"` replaced by entities.
+#' @keywords internal
+.html_escape <- function(x) {
+  x <- gsub("&", "&amp;", x, fixed = TRUE)
+  x <- gsub("<", "&lt;",  x, fixed = TRUE)
+  x <- gsub(">", "&gt;",  x, fixed = TRUE)
+  gsub("\"", "&quot;", x, fixed = TRUE)
+}
 
 #' Load a template from inst/templates/
 #' @keywords internal

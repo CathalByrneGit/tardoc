@@ -167,7 +167,7 @@ target_groups <- function(targets_data, cfg = NULL,
   fn_names <- as.character(verts$name[verts$type == "function"])
   if (!length(fn_names)) return(NULL)
 
-  r_files <- list.files(cfg$r_scripts_dir, pattern = "\\.[Rr]$", full.names = TRUE)
+  r_files <- .function_r_files(cfg)
   if (length(r_files) < 2) return(NULL)   # one file cannot partition anything
 
   home <- character()

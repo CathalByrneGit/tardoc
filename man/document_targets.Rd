@@ -16,8 +16,10 @@ document_targets(
   llm_model = NULL,
   llm_api_key = NULL,
   llm_base_url = NULL,
+  llm_refresh = FALSE,
   check_outdated = TRUE,
-  group_by = "auto"
+  group_by = "auto",
+  code_dirs = NULL
 )
 }
 \arguments{
@@ -47,6 +49,12 @@ function explanations via an LLM. Default \code{FALSE}.}
 \item{llm_base_url}{Base URL for \code{"openai_compatible"} provider (e.g. a
 llama.cpp server: \code{"http://localhost:8080/v1"}).}
 
+\item{llm_refresh}{Logical. With \code{llm = TRUE}, regenerate every description
+and explanation instead of keeping what an earlier run produced. By default
+a target already described on its page is left alone and a function is
+explained again only when its source or docs change (cached in
+\code{llm_cache.json}).}
+
 \item{check_outdated}{Logical. Call \code{\link[targets:tar_outdated]{targets::tar_outdated()}} so pages and
 the graph can tell a stale target from a current one. It re-hashes
 dependencies, so pass \code{FALSE} on a large pipeline to skip it; status then
@@ -57,6 +65,10 @@ falls back to reporting errors only.}
 well, \code{"none"} disables it, or name one of \code{"declaration"}, \code{"functions"},
 \code{"prefix"}, \code{"depth"} to force it. See \code{\link[=target_groups]{target_groups()}}. Grouping only
 adds an option in the viewer -- the flat graph stays the default view.}
+
+\item{code_dirs}{Where the function code lives, when it is not in
+\verb{R/}: directories (searched recursively) and/or files. \code{NULL} reads them
+from the \code{tar_source()} calls in \verb{_targets.R}. See \code{\link[=build_site_config]{build_site_config()}}.}
 }
 \value{
 The \code{cfg} list, invisibly.

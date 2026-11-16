@@ -12,7 +12,8 @@ generate_llm_content(
   provider = "openai",
   model = NULL,
   api_key = NULL,
-  base_url = NULL
+  base_url = NULL,
+  refresh = FALSE
 )
 }
 \arguments{
@@ -36,6 +37,11 @@ standard environment variable is used.}
 
 \item{base_url}{Character. Base URL for \code{"ollama"} and
 \code{"openai_compatible"} providers.}
+
+\item{refresh}{Logical. Regenerate everything. By default a target
+that already has a description on its page is left alone, and a function
+is explained again only when its source or docs changed -- a run used to
+pay for every function every time.}
 }
 \value{
 Invisibly \code{NULL}; called for its side effect of rewriting the

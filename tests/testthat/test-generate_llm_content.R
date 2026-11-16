@@ -116,3 +116,51 @@ test_that("an unknown provider is rejected by name", {
     "Unknown provider"
   )
 })
+
+# ---- not paying twice ---------------------------------------------------------
+
+test_that("a target already described on its page is not sent to the model again", {
+  skip_if_not_installed("ellmer")
+  d  <- local_documented()
+  .inject_description(file.path(d$cfg$targets_dir, "model_fit.md"), "model_fit", "Kept.")
+  ch <- stub_chat()
+  suppressMessages(generate_llm_content(d$td, character(), d$cfg, llm_chat = ch))
+  expect_false(grepl("'model_fit'", paste(ch$prompts, collapse = "\n"), fixed = TRUE))
+  expect_identical(.page_description(file.path(d$cfg$targets_dir, "model_fit.md")), "Kept.")
+})
+
+test_that("refresh = TRUE regenerates a description that already exists", {
+  skip_if_not_installed("ellmer")
+  d  <- local_documented()
+  .inject_description(file.path(d$cfg$targets_dir, "model_fit.md"), "model_fit", "Old.")
+  ch <- stub_chat(reply = "New sentence.")
+  suppressMessages(generate_llm_content(d$td, character(), d$cfg, llm_chat = ch, refresh = TRUE))
+  expect_identical(.page_description(file.path(d$cfg$targets_dir, "model_fit.md")), "New sentence.")
+})
+
+test_that("an unchanged function's explanation comes from the cache, not the model", {
+  skip_if_not_installed("ellmer")
+  d  <- local_documented()
+  ch <- stub_chat(reply = "Adds two numbers.")
+  suppressMessages(generate_llm_content(d$td, "add", d$cfg, llm_chat = ch))
+  first <- ch$calls
+  suppressMessages(generate_all_function_pages(d$cfg))     # wipes the block, as every run does
+  ch2 <- stub_chat(reply = "SHOULD NOT BE ASKED")
+  suppressMessages(generate_llm_content(d$td, "add", d$cfg, llm_chat = ch2))
+  fn_prompts <- ch2$prompts[!startsWith(ch2$prompts, "[SYSTEM CONTEXT]") & grepl("function 'add'", ch2$prompts, fixed = TRUE)]
+  expect_length(fn_prompts, 0L)
+  expect_match(paste(readLines(file.path(d$cfg$functions_dir, "add.md")), collapse = "\n"),
+               "Adds two numbers.", fixed = TRUE)
+})
+
+test_that("an edited function is explained again", {
+  skip_if_not_installed("ellmer")
+  d  <- local_documented()
+  suppressMessages(generate_llm_content(d$td, "add", d$cfg, llm_chat = stub_chat(reply = "v1")))
+  f <- file.path(d$cfg$r_scripts_dir, "helpers.R")
+  writeLines(sub("x + y", "x + y + 1", readLines(f), fixed = TRUE), f)
+  suppressMessages(generate_all_function_pages(d$cfg))
+  ch <- stub_chat(reply = "v2")
+  suppressMessages(generate_llm_content(d$td, "add", d$cfg, llm_chat = ch))
+  expect_match(paste(readLines(file.path(d$cfg$functions_dir, "add.md")), collapse = "\n"), "v2", fixed = TRUE)
+})

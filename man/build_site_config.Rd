@@ -4,7 +4,12 @@
 \alias{build_site_config}
 \title{Build a site config list}
 \usage{
-build_site_config(project_path = ".", site_dir = "tardoc", repo_url = NULL)
+build_site_config(
+  project_path = ".",
+  site_dir = "tardoc",
+  repo_url = NULL,
+  code_dirs = NULL
+)
 }
 \arguments{
 \item{project_path}{Path to the targets project root. Default \code{"."}.}
@@ -14,9 +19,16 @@ build_site_config(project_path = ".", site_dir = "tardoc", repo_url = NULL)
 \item{repo_url}{Base URL of the hosted repo, e.g.
 \code{"https://github.com/user/repo/blob/main/"}. Enables source links on
 function and target pages. Default \code{NULL}.}
+
+\item{code_dirs}{Where the project's function code lives: directories
+(searched recursively) and/or individual files, relative to
+\code{project_path} or absolute. \code{NULL} (the default) reads them from the
+\code{tar_source()} calls in \verb{_targets.R}, so \code{tar_source("code")} is enough;
+with none found it falls back to \code{"R"}. Only \code{.R} and \code{.r} files are read.}
 }
 \value{
-A named list used as \code{cfg} throughout the package.
+A named list used as \code{cfg} throughout the package. \code{r_scripts_dir}
+holds the resolved code locations -- a character vector, one or many.
 }
 \description{
 All generated content goes into \code{site_dir} (default \code{"tardoc"}) inside the

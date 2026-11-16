@@ -42,7 +42,7 @@ generate_search_index <- function(targets_data, function_names, cfg) {
 
   function_entries <- lapply(function_names, function(fn_name) {
     # Find which R file defines this function
-    r_files   <- list.files(cfg$r_scripts_dir, pattern = "\\.R$", full.names = TRUE)
+    r_files   <- .function_r_files(cfg)
     src_file  <- .find_function_file(fn_name, r_files)
     docs      <- if (!is.null(src_file)) {
       suppressWarnings(get_fn_docs(fn_name, src_file))

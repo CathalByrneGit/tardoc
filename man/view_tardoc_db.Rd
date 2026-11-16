@@ -10,7 +10,9 @@ view_tardoc_db(
   port = 9000,
   quack_port = 9494,
   llm_chat = NULL,
-  db_extensions = FALSE
+  db_extensions = FALSE,
+  code_dirs = NULL,
+  host = "127.0.0.1"
 )
 }
 \arguments{
@@ -31,6 +33,15 @@ Any provider: \code{ellmer::chat_openai()}, \code{ellmer::chat_ollama("llama3.2"
 building \code{tardoc.duckdb}: \code{quackformers} (BERT semantic search), \code{faiss},
 \code{duckdb_mcp}. Slow on first run. Default
 \code{FALSE}.}
+
+\item{code_dirs}{Where the function code lives; see
+\code{\link[=document_targets]{document_targets()}}. \code{NULL} reads it from \verb{_targets.R}.}
+
+\item{host}{Address the HTML server listens on. Default
+\code{"127.0.0.1"}: only this machine. The server answers chat requests with
+your LLM credentials and reads files from the docs folder, so
+\code{"0.0.0.0"} (every interface) is for a trusted network and a deliberate
+choice.}
 }
 \description{
 Starts a DuckDB Quack server (background process via \code{callr}) and a minimal
