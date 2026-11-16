@@ -163,7 +163,10 @@ test_that("a project title with markup does not reach the viewer unescaped", {
 
 test_that("llms.txt lists functions without running the project's top-level code", {
   tmp <- withr::local_tempdir(); cfg <- cfg_for(tmp)
-  marker <- file.path(tmp, "ran.txt")
+  # Forward slashes: the path is written into R source as a string literal, and
+  # on Windows "C:\\Users\\..." is an invalid escape that stops the file parsing --
+  # which emptied the function list and failed this test for the wrong reason.
+  marker <- file.path(normalizePath(tmp, winslash = "/"), "ran.txt")
   dir.create(file.path(tmp, "R"))
   writeLines(c("add <- function(x, y) x + y",
                sprintf("writeLines('x', '%s')", marker)), file.path(tmp, "R", "f.R"))

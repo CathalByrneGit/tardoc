@@ -44,7 +44,7 @@ test_that("a bare tar_source() means R/", {
 })
 
 test_that("a computed path is skipped, not guessed at or run", {
-  marker <- withr::local_tempfile()
+  marker <- normalizePath(withr::local_tempfile(), winslash = "/", mustWork = FALSE)
   d <- proj(c(sprintf('invisible(writeLines("x", "%s"))', marker),
               "tar_source(Sys.getenv('X_DIR'))", "list()"),
             list("R/a.R" = fn("a")))
