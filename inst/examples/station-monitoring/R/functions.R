@@ -67,10 +67,49 @@ flag_drifting_stations <- function(model, tolerance = 0.05) {
 
 #' Render the station report
 #'
+#' Writes a small self-contained HTML page -- the summary table, a bar per
+#' station and the stations flagged for inspection -- with base R alone, so the
+#' example needs no rmarkdown or pandoc. A `tarchetypes::tar_render()` target
+#' publishes the same way: it is a file target whose output is an HTML.
+#'
 #' @param summary Per-station summary table.
 #' @param flags Stations flagged for inspection.
+#' @param path Where to write the report.
 #' @return Path to the written report.
 #' @export
-render_report <- function(summary, flags) {
-  tempfile(fileext = ".html")
+render_report <- function(summary, flags, path = "report/station_report.html") {
+  dir.create(dirname(path), recursive = TRUE, showWarnings = FALSE)
+
+  temps <- summary$temp_c
+  width <- 360
+  bar_w <- 20
+  scale <- (width - 140) / max(abs(temps), 1)
+  bars <- vapply(seq_len(nrow(summary)), function(i) {
+    y <- (i - 1) * (bar_w + 6) + 4
+    sprintf(paste0(
+      "<text x='0' y='%d' font-size='12' fill='#444'>%s</text>",
+      "<rect x='70' y='%d' width='%.1f' height='%d' rx='3' fill='#6d28d9'/>",
+      "<text x='%.1f' y='%d' font-size='11' fill='#444'>%.1f \u00b0C</text>"),
+      y + 14, summary$station[i], y, max(abs(temps[i]) * scale, 1), bar_w,
+      74 + max(abs(temps[i]) * scale, 1), y + 14, temps[i])
+  }, character(1))
+  rows <- sprintf("<tr><td>%s</td><td>%.2f</td></tr>", summary$station, temps)
+
+  writeLines(c(
+    "<!doctype html><html lang='en'><head><meta charset='utf-8'>",
+    "<title>Station report</title>",
+    "<style>body{font:15px system-ui,sans-serif;max-width:640px;margin:2rem auto;padding:0 1rem;color:#222}",
+    "table{border-collapse:collapse;width:100%}td,th{border:1px solid #ddd;padding:6px 10px;text-align:left}",
+    "th{background:#f4f1fb}.flag{background:#fef3c7;padding:.6rem 1rem;border-radius:6px}</style></head><body>",
+    "<h1>Station report</h1>",
+    "<p>Mean temperature per station, from the readings that passed the range filter.</p>",
+    sprintf("<svg width='%d' height='%d' role='img' aria-label='Mean temperature per station'>%s</svg>",
+            width, nrow(summary) * (bar_w + 6) + 8, paste(bars, collapse = "")),
+    "<h2>Summary</h2><table><tr><th>Station</th><th>Mean temp (\u00b0C)</th></tr>",
+    rows, "</table><h2>Needs inspection</h2>",
+    if (length(flags)) sprintf("<p class='flag'>Flagged: %s</p>", paste(flags, collapse = ", "))
+    else "<p>No stations flagged.</p>",
+    "</body></html>"
+  ), path, useBytes = TRUE)
+  path
 }

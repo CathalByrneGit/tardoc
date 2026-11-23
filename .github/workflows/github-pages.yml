@@ -84,6 +84,9 @@ jobs:
           targets::tar_make()
           tardoc::document_targets(
             pkg_name = "Station Monitoring Pipeline",
+            # The example's report target writes an HTML; publishing it shows the
+            # Open report button on the live demo.
+            reports  = TRUE,
             repo_url = paste0(
               "https://github.com/", Sys.getenv("GITHUB_REPOSITORY"),
               "/blob/main/inst/examples/station-monitoring/"

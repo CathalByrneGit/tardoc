@@ -4,7 +4,7 @@
 \alias{.find_free_port}
 \title{Find a free TCP port starting from the given port}
 \usage{
-.find_free_port(start_port)
+.find_free_port(start_port, avoid = integer())
 }
 \description{
 Find a free TCP port starting from the given port

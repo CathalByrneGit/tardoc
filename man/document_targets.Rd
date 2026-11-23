@@ -16,8 +16,11 @@ document_targets(
   llm_model = NULL,
   llm_api_key = NULL,
   llm_base_url = NULL,
+  llm_refresh = FALSE,
+  reports = FALSE,
   check_outdated = TRUE,
-  group_by = "auto"
+  group_by = "auto",
+  code_dirs = NULL
 )
 }
 \arguments{
@@ -47,6 +50,23 @@ function explanations via an LLM. Default \code{FALSE}.}
 \item{llm_base_url}{Base URL for \code{"openai_compatible"} provider (e.g. a
 llama.cpp server: \code{"http://localhost:8080/v1"}).}
 
+\item{llm_refresh}{Logical. With \code{llm = TRUE}, regenerate every description
+and explanation instead of keeping what an earlier run produced. By default
+a target already described on its page is left alone and a function is
+explained again only when its source or docs change (cached in
+\code{llm_cache.json}).}
+
+\item{reports}{Publish what file targets produced -- the rendered
+report of a \code{tarchetypes::tar_render()} or \code{tar_quarto()} target, or any
+\code{format = "file"} target that writes an \code{.html} or \code{.pdf}. \code{FALSE} (the
+default), \code{TRUE} for every such target, or a character vector of target
+names. Outputs are copied to \verb{tardoc/reports/<target>/} with their
+supporting folders, and the target's page and the viewer get an
+\strong{Open report} link -- only for a target that has built without error;
+an out-of-date one is marked as such. Off by default because a report can
+hold data you would not want on a public site, and the docs folder is what
+gets deployed. With no store nothing is published.}
+
 \item{check_outdated}{Logical. Call \code{\link[targets:tar_outdated]{targets::tar_outdated()}} so pages and
 the graph can tell a stale target from a current one. It re-hashes
 dependencies, so pass \code{FALSE} on a large pipeline to skip it; status then
@@ -57,6 +77,10 @@ falls back to reporting errors only.}
 well, \code{"none"} disables it, or name one of \code{"declaration"}, \code{"functions"},
 \code{"prefix"}, \code{"depth"} to force it. See \code{\link[=target_groups]{target_groups()}}. Grouping only
 adds an option in the viewer -- the flat graph stays the default view.}
+
+\item{code_dirs}{Where the function code lives, when it is not in
+\verb{R/}: directories (searched recursively) and/or files. \code{NULL} reads them
+from the \code{tar_source()} calls in \verb{_targets.R}. See \code{\link[=build_site_config]{build_site_config()}}.}
 }
 \value{
 The \code{cfg} list, invisibly.

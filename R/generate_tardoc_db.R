@@ -168,22 +168,16 @@ generate_tardoc_db <- function(targets_data, function_names, cfg,
 
 .create_core_tables <- function(con, targets_data, function_names, cfg) {
   target_rows <- lapply(targets_data$target_names, function(tn) {
-    manifest_row <- dplyr::filter(targets_data$manifest, .data$name == tn)
-    meta_row     <- dplyr::filter(targets_data$meta,     .data$name == tn)
-    dep          <- get_target_network_dependencies(
+    dep <- get_target_network_dependencies(
       tn, targets_data$network, max_depth_up = Inf, max_depth_down = Inf
     )
-    desc       <- .pull_desc_db(manifest_row)
-    command    <- dplyr::pull(manifest_row, "command")
-    status     <- .target_status(tn, targets_data$meta, targets_data$outdated,
-                                isTRUE(targets_data$has_store))
-    last_built <- as.character(meta_row$time)
+    b <- .target_basics(tn, targets_data)
     data.frame(
       name         = tn,
-      description  = if (is.na(desc)) "" else desc,
-      command      = command,
-      status       = status,
-      last_built   = if (is.na(last_built)) "" else last_built,
+      description  = b$description,
+      command      = b$command,
+      status       = b$status,
+      last_built   = b$last_built,
       n_upstream   = length(dep$upstream),
       n_downstream = length(dep$downstream),
       notes        = read_note(tn, "targets", cfg),
@@ -196,11 +190,11 @@ generate_tardoc_db <- function(targets_data, function_names, cfg,
   DBI::dbWriteTable(con, "targets",
                     .rows_or_empty(target_rows, .targets_proto), overwrite = TRUE)
 
-  r_files <- list.files(cfg$r_scripts_dir, pattern = "\\.R$", full.names = TRUE)
+  r_files <- .function_r_files(cfg)
   func_rows <- lapply(function_names, function(fn) {
-    src  <- .find_src_db(fn, r_files)
+    src  <- .find_function_file(fn, r_files)
     docs <- if (!is.null(src)) suppressWarnings(get_fn_docs(fn, src)) else NULL
-    desc <- if (!is.null(docs)) .extract_desc_db(docs) else ""
+    desc <- if (!is.null(docs)) .docs_description(docs) else ""
     data.frame(name = fn, description = desc,
                source_file = if (!is.null(src)) basename(src) else "",
                notes = read_note(fn, "functions", cfg),
@@ -238,28 +232,6 @@ generate_tardoc_db <- function(targets_data, function_names, cfg,
   invisible(out)
 }
 
-.pull_desc_db <- function(manifest_row) {
-  if (!"description" %in% names(manifest_row)) return(NA_character_)
-  val <- dplyr::pull(manifest_row, "description")
-  if (length(val) == 0 || is.na(val) || nchar(trimws(val)) == 0) NA_character_ else val
-}
-.find_src_db <- function(fn, r_files) {
-  for (f in r_files) {
-    env <- new.env(parent = globalenv())
-    tryCatch(source(f, local = env), error = function(e) NULL)
-    if (fn %in% ls(env)) return(f)
-  }
-  NULL
-}
-.extract_desc_db <- function(docs_md) {
-  lines <- strsplit(docs_md, "\n")[[1]]
-  in_d  <- FALSE; dl <- character()
-  for (l in lines) {
-    if (grepl("^##\\s+Description", l, ignore.case = TRUE)) { in_d <- TRUE; next }
-    if (in_d) { if (grepl("^##", l)) break; dl <- c(dl, l) }
-  }
-  trimws(paste(dl, collapse = "\n"))
-}
 
 # Embedding width produced by quackformers' embed(); embed_jina() is 768.
 .embedding_dim <- 384L

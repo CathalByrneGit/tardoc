@@ -26,17 +26,25 @@ generate_all_target_pages <- function(targets_data, cfg) {
       max_depth_down = 2
     )
 
-    functions <- dplyr::filter(
-      targets_data$meta,
-      .data$type == "function",
-      .data$name %in% dependency$upstream
+    # Functions come from the network, which targets builds from _targets.R
+    # alone. They used to come from the store's metadata, so a project
+    # documented before its first tar_make() -- a supported, documented use --
+    # listed no functions on any target.
+    verts     <- as.data.frame(targets_data$network$vertices, stringsAsFactors = FALSE)
+    fn_names  <- if ("type" %in% names(verts)) {
+      as.character(verts$name[verts$type == "function"])
+    } else character()
+    functions <- data.frame(
+      name = sort(intersect(fn_names, dependency$upstream)),
+      stringsAsFactors = FALSE
     )
 
     repo_link       <- .target_repo_link(target_name, cfg)
     generated_block <- .build_target_generated_block(
       target_name, .target_facts(target_name, targets_data),
       functions, dependency, repo_link,
-      branches = .target_branches(target_name, targets_data$meta)
+      branches = .target_branches(target_name, targets_data$meta),
+      output   = .output_section(target_name, targets_data$reports[[target_name]])
     )
 
     out_path <- file.path(cfg$targets_dir, paste0(target_name, ".md"))
@@ -58,7 +66,8 @@ generate_all_target_pages <- function(targets_data, cfg) {
 .build_target_generated_block <- function(target_name, facts,
                                           functions, dependency,
                                           repo_link = "",
-                                          branches = NULL) {
+                                          branches = NULL,
+                                          output = "") {
   fn_links <- if (nrow(functions) == 0) {
     "_No distinct functions identified._"
   } else {
@@ -71,6 +80,7 @@ generate_all_target_pages <- function(targets_data, cfg) {
     .facts_table(facts),
     .facts_sections(facts),
     if (is.null(branches)) "" else .branches_section(branches),
+    output,
     "## Command\n\n",
     "```r\n", facts$command, "\n```\n\n",
     "## Functions called\n\n",
@@ -189,9 +199,14 @@ generate_all_target_pages <- function(targets_data, cfg) {
 #' @keywords internal
 .write_generated_md <- function(path, title_line, description,
                                  generated_block) {
+  # One line: a newline inside a description would end the blockquote.
   header <- paste0(
-    title_line, "\n\n",
-    if (!is.na(description)) paste0("> ", description, "\n\n") else ""
+    title_line, "
+
+",
+    if (!is.na(description)) paste0("> ", gsub("[[:space:]]+", " ", description), "
+
+") else ""
   )
 
   generated_section <- paste0(
@@ -224,6 +239,18 @@ generate_all_target_pages <- function(targets_data, cfg) {
   has_end   <- grepl(end_tag,   existing, fixed = TRUE)
 
   if (has_start && has_end) {
+    # The description sits above the markers, so replacing only what is between
+    # them left an edited `description =` in _targets.R out of its own page for
+    # good. Refresh the header when it is still exactly what tardoc writes
+    # (title, then at most a blockquote) and the pipeline supplies a
+    # description; anything else above the markers is the user's, and a
+    # description written there by llm = TRUE survives a run that has none.
+    at     <- regexpr(start_tag, existing, fixed = TRUE)
+    top    <- substr(existing, 1L, at - 1L)
+    if (grepl(">", header, fixed = TRUE) &&
+        grepl("^# [^\n]+\n\n(> [^\n]*\n\n)?$", top, perl = TRUE)) {
+      existing <- paste0(header, substring(existing, at))
+    }
     # Replace between the markers
     before <- sub(paste0("(?s)", start_tag, ".*?", end_tag),
                   paste0(start_tag, "\n__BLOCK__\n", end_tag),

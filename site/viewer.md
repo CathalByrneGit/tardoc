@@ -97,6 +97,9 @@ local dependency graph centred on that target with its immediate upstream and
 downstream neighbours. Functions appear with a dashed border and a `function`
 label; clicking any neighbour navigates to it.
 
+A target that produced a report gets an **Output** section with an **Open report**
+button — see [Publishing reports](publishing.html#sec:publishing-reports).
+
 A dynamic target additionally lists **each branch** with its own runtime, size
 and error. Failed branches are always listed, however many branches there are.
 
@@ -188,6 +191,12 @@ Requires [ellmer](https://ellmer.tidyverse.org/). Calls are made only for
 targets where `description = ""` and for every function page, and the results are
 written back into the `.md` files inside the generated block — so they are
 reviewable in a diff, and editable.
+
+Nothing is paid for twice. A target already described on its page keeps that
+description, and a function's explanation is cached (in `llm_cache.json`, beside
+the docs) and reused while its source and docs are unchanged. Descriptions the
+model wrote reach the search index, graph panel, `llms.txt` and analytics too,
+not only the page. `llm_refresh = TRUE` regenerates everything.
 
 ## On large pipelines
 

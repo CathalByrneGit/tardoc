@@ -62,8 +62,10 @@ generate_llms_txt <- function(targets_data,
                     "### ", target_name, "\n\n",
                     if (!is.na(description)) paste0("> ", description, "\n\n") else "",
                     "- **Upstream:** ",   upstream,   "\n",
-                    "- **Downstream:** ", downstream, "\n\n",
-                    "**Command:**\n\n",
+                    "- **Downstream:** ", downstream, "\n",
+                    if (!is.null(targets_data$reports[[target_name]]))
+                      paste0("- **Output:** tardoc/", targets_data$reports[[target_name]]$href, "\n"),
+                    "\n**Command:**\n\n",
                     "```r\n", command_str, "\n```\n\n"
     )
   }
@@ -72,14 +74,13 @@ generate_llms_txt <- function(targets_data,
 }
 
 .llms_functions_section <- function(cfg) {
-  r_files <- list.files(cfg$r_scripts_dir, pattern = "\\.R$", full.names = TRUE)
+  r_files <- .function_r_files(cfg)
   lines   <- "## Functions\n\n"
 
   for (file in r_files) {
-    func_env <- new.env(parent = globalenv())  # globalenv so base functions like <- are available
-    source(file, local = func_env)
-
-    for (func_name in ls(func_env)) {
+    # Parsed, not sourced: sourcing ran the user's top-level code and a single
+    # failing file aborted the whole llms.txt.
+    for (func_name in .file_defines(file)) {
       # suppressWarnings: NULL return for undocumented functions is expected
       docs <- suppressWarnings(get_fn_docs(func_name, file))
 
@@ -101,21 +102,30 @@ generate_llms_txt <- function(targets_data,
 }
 
 .extract_description <- function(docs_md) {
-  lines     <- strsplit(docs_md, "\n")[[1]]
-  in_desc   <- FALSE
-  desc_lines <- character()
+  result <- .docs_description(docs_md)
+  if (nchar(result) == 0) "_No description._" else result
+}
 
+#' The Description section of a function's rendered docs
+#'
+#' Three copies of this existed (one per output that needed it), two of them
+#' identical and one differing only in what it returns when there is none.
+#'
+#' @param docs_md Markdown from [get_fn_docs()].
+#' @return The text under `## Description`, `""` if there is none.
+#' @keywords internal
+.docs_description <- function(docs_md) {
+  lines <- strsplit(docs_md, "
+", fixed = TRUE)[[1]]
+  in_desc <- FALSE
+  out <- character()
   for (line in lines) {
-    if (grepl("^##\\s+Description", line, ignore.case = TRUE)) {
-      in_desc <- TRUE
-      next
-    }
+    if (grepl("^##\\s+Description", line, ignore.case = TRUE)) { in_desc <- TRUE; next }
     if (in_desc) {
       if (grepl("^##", line)) break
-      desc_lines <- c(desc_lines, line)
+      out <- c(out, line)
     }
   }
-
-  result <- trimws(paste(desc_lines, collapse = "\n"))
-  if (nchar(result) == 0) "_No description._" else result
+  trimws(paste(out, collapse = "
+"))
 }

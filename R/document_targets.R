@@ -15,6 +15,9 @@
 #' @param pkg_name      Title shown in viewer headers.
 #' @param pkg_desc      One-paragraph project description (used in `llms.txt`).
 #' @param repo_url      Optional base URL of the hosted repo for source links.
+#' @param code_dirs     Where the function code lives, when it is not in
+#'   `R/`: directories (searched recursively) and/or files. `NULL` reads them
+#'   from the `tar_source()` calls in `_targets.R`. See [build_site_config()].
 #' @param llm           Logical. Auto-generate missing target descriptions and
 #'   function explanations via an LLM. Default `FALSE`.
 #' @param llm_chat      A pre-configured ellmer `Chat` object. When provided,
@@ -25,6 +28,21 @@
 #' @param llm_api_key   API key. `NULL` reads the env var.
 #' @param llm_base_url  Base URL for `"openai_compatible"` provider (e.g. a
 #'   llama.cpp server: `"http://localhost:8080/v1"`).
+#' @param reports       Publish what file targets produced -- the rendered
+#'   report of a `tarchetypes::tar_render()` or `tar_quarto()` target, or any
+#'   `format = "file"` target that writes an `.html` or `.pdf`. `FALSE` (the
+#'   default), `TRUE` for every such target, or a character vector of target
+#'   names. Outputs are copied to `tardoc/reports/<target>/` with their
+#'   supporting folders, and the target's page and the viewer get an
+#'   **Open report** link -- only for a target that has built without error;
+#'   an out-of-date one is marked as such. Off by default because a report can
+#'   hold data you would not want on a public site, and the docs folder is what
+#'   gets deployed. With no store nothing is published.
+#' @param llm_refresh   Logical. With `llm = TRUE`, regenerate every description
+#'   and explanation instead of keeping what an earlier run produced. By default
+#'   a target already described on its page is left alone and a function is
+#'   explained again only when its source or docs change (cached in
+#'   `llm_cache.json`).
 #' @param group_by How the pipeline overview may be collapsed into groups:
 #'   `"auto"` picks a grouping signal and rejects the lot when none scores
 #'   well, `"none"` disables it, or name one of `"declaration"`, `"functions"`,
@@ -67,26 +85,26 @@ document_targets <- function(project_path  = ".",
                               llm_model     = NULL,
                               llm_api_key   = NULL,
                               llm_base_url  = NULL,
+                              llm_refresh   = FALSE,
+                              reports       = FALSE,
                               check_outdated = TRUE,
-                              group_by      = "auto") {
+                              group_by      = "auto",
+                              code_dirs     = NULL) {
 
-  cfg <- build_site_config(project_path, site_dir, repo_url)
+  cfg <- build_site_config(project_path, site_dir, repo_url, code_dirs)
   setup_site_dirs(cfg)
 
   targets_data   <- load_targets_data(cfg, check_outdated = check_outdated)
+  # Before the pages: each target's page links to what it published.
+  targets_data   <- .publish_reports(targets_data, cfg, reports)
   target_names   <- generate_all_target_pages(targets_data, cfg)
   function_names <- generate_all_function_pages(cfg)
 
-  # Before the viewer, so this run's figures are in the history the viewer
-  # embeds -- the diff shown is then between this build and the one before.
-  record_run_snapshot(targets_data, cfg)
-
   generate_notes(target_names, function_names, cfg)
-  generate_search_index(targets_data, function_names, cfg)
-  generate_llms_txt(targets_data, cfg,
-                     project_title = pkg_name, project_desc = pkg_desc)
 
-  # Optional: LLM-generated descriptions and explanations
+  # Optional: LLM-generated descriptions and explanations. Before anything that
+  # reads descriptions: it used to run after the search index and llms.txt were
+  # written, so the targets it had just described were "undescribed" in both.
   if (isTRUE(llm)) {
     generate_llm_content(
       targets_data   = targets_data,
@@ -96,9 +114,22 @@ document_targets <- function(project_path  = ".",
       provider       = llm_provider,
       model          = llm_model,
       api_key        = llm_api_key,
-      base_url       = llm_base_url
+      base_url       = llm_base_url,
+      refresh        = llm_refresh
     )
   }
+
+  # Descriptions already on the pages (written by an earlier llm = TRUE run, or
+  # by this one) become part of the data every output below is built from.
+  targets_data <- .merge_page_descriptions(targets_data, cfg)
+
+  # Before the viewer, so this run's figures are in the history the viewer
+  # embeds -- the diff shown is then between this build and the one before.
+  record_run_snapshot(targets_data, cfg)
+
+  generate_search_index(targets_data, function_names, cfg)
+  generate_llms_txt(targets_data, cfg,
+                     project_title = pkg_name, project_desc = pkg_desc)
 
   # Tier 1: self-contained viewer
   generate_viewer(targets_data, function_names, cfg, pkg_name,
@@ -176,6 +207,13 @@ view_wasm_analytics <- function(project_path = ".", site_dir = "tardoc") {
 #' @param site_dir     Subfolder used in [document_targets()].
 #' @param port         Port for the HTML server. Default `9000`.
 #' @param quack_port   Port for the Quack DuckDB server. Default `9494`.
+#' @param code_dirs    Where the function code lives; see
+#'   [document_targets()]. `NULL` reads it from `_targets.R`.
+#' @param host         Address the HTML server listens on. Default
+#'   `"127.0.0.1"`: only this machine. The server answers chat requests with
+#'   your LLM credentials and reads files from the docs folder, so
+#'   `"0.0.0.0"` (every interface) is for a trusted network and a deliberate
+#'   choice.
 #' @param db_extensions Logical. Install community DuckDB extensions when
 #'   building `tardoc.duckdb`: `quackformers` (BERT semantic search), `faiss`,
 #'   `duckdb_mcp`. Slow on first run. Default
@@ -188,7 +226,9 @@ view_wasm_analytics <- function(project_path = ".", site_dir = "tardoc") {
 view_tardoc_db <- function(project_path = ".", site_dir = "tardoc",
                             port = 9000, quack_port = 9494,
                             llm_chat = NULL,
-                            db_extensions = FALSE) {
+                            db_extensions = FALSE,
+                            code_dirs = NULL,
+                            host = "127.0.0.1") {
   for (pkg in c("httpuv", "duckdb", "callr", "DBI")) {
     if (!requireNamespace(pkg, quietly = TRUE))
       stop(sprintf("'%s' is required: install.packages('%s')", pkg, pkg))
@@ -196,11 +236,20 @@ view_tardoc_db <- function(project_path = ".", site_dir = "tardoc",
 
   site_path <- file.path(normalizePath(project_path), site_dir)
   db_path   <- file.path(site_path, "tardoc.duckdb")
-  cfg       <- build_site_config(project_path, site_dir)
+  cfg       <- build_site_config(project_path, site_dir, code_dirs = code_dirs)
 
   # Generate tardoc.duckdb if it doesn't exist yet, or regenerate with
   # extensions if db_extensions = TRUE and was previously built without them
-  if (!file.exists(db_path) || isTRUE(db_extensions)) {
+  # Also when the docs were regenerated after the database was built: it was
+  # otherwise served stale, quietly, until deleted by hand. A rebuild keeps the
+  # extension layers the old database had, so refreshing never silently
+  # downgrades it.
+  stale <- .db_is_stale(site_path, db_path)
+  if (stale && !isTRUE(db_extensions) && .db_had_extensions(db_path)) {
+    db_extensions <- TRUE
+  }
+  if (stale) message("tardoc.duckdb is older than the current docs -- rebuilding.")
+  if (!file.exists(db_path) || isTRUE(db_extensions) || stale) {
     if (!requireNamespace("duckdb", quietly = TRUE)) {
       message("'duckdb' not installed -- skipping database generation. ",
               "Install with: install.packages('duckdb')")
@@ -264,8 +313,14 @@ view_tardoc_db <- function(project_path = ".", site_dir = "tardoc",
     .patch_sql_tool_logging(llm_chat, chat_con, sql_log)
   }
 
+  # Pick the ports first: they used to be chosen after the Quack server was
+  # started on the requested one, so the page was told a port the server was
+  # not on whenever the first was busy, and two services could pick the same.
+  port       <- .find_free_port(port)
+  quack_port <- .find_free_port(quack_port, avoid = port)
+
   # Start Quack server in background
-  token      <- paste(sample(c(letters, 0:9), 20, replace = TRUE), collapse = "")
+  token      <- .session_token()
   quack_proc <- NULL
   if (file.exists(db_path)) {
     message("Starting Quack server on port ", quack_port, "...")
@@ -320,52 +375,7 @@ view_tardoc_db <- function(project_path = ".", site_dir = "tardoc",
     llm_enabled = !is.null(llm_chat)
   )
 
-  serve_file <- function(fp) {
-    mime <- switch(tools::file_ext(fp),
-      html = "text/html", json = "application/json",
-      js = "application/javascript", "application/octet-stream")
-    list(status  = 200L,
-         headers = list("Content-Type" = mime,
-                        "Access-Control-Allow-Origin" = "*"),
-         body    = readBin(fp, "raw", file.info(fp)$size))
-  }
-
-  # Find a free port if the requested one is in use
-  port <- .find_free_port(port)
-  quack_port <- .find_free_port(quack_port)
-
-  app <- list(call = function(req) {
-    p <- req$PATH_INFO
-
-    if (req$REQUEST_METHOD == "OPTIONS")
-      return(list(status = 204L,
-                  headers = list("Access-Control-Allow-Origin"  = "*",
-                                 "Access-Control-Allow-Methods" = "POST, GET, OPTIONS",
-                                 "Access-Control-Allow-Headers" = "Content-Type"),
-                  body = ""))
-
-    if (p == "/chat" && req$REQUEST_METHOD == "POST") {
-      if (is.null(llm_chat))
-        return(.json_resp(list(error = "LLM not configured.")))
-      tryCatch({
-        body <- jsonlite::fromJSON(rawToChar(req$rook.input$read()))
-        if (isTRUE(body$clear)) {
-          llm_chat$set_turns(list())
-          sql_log$calls <- list()
-          return(.json_resp(list(response = "Conversation cleared.")))
-        }
-        sql_log$calls <- list()
-        response      <- llm_chat$chat(body$message, echo = FALSE)
-        .json_resp(list(response = response, sql_calls = sql_log$calls))
-      }, error = function(e) .json_resp(list(error = conditionMessage(e))))
-    } else {
-      fp <- if (p == "/" || p == "" || p == "/analytics") session_path
-            else file.path(site_path, sub("^/", "", p))
-      if (file.exists(fp)) serve_file(fp) else
-        list(status = 404L, headers = list("Content-Type" = "text/plain"),
-             body = "Not found")
-    }
-  })
+  app <- .analytics_app(site_path, session_path, port, llm_chat, sql_log)
 
   url <- paste0("http://localhost:", port)
   message("\nAnalytics viewer: ", url)
@@ -381,8 +391,84 @@ view_tardoc_db <- function(project_path = ".", site_dir = "tardoc",
   }, add = TRUE)
 
   utils::browseURL(url)
-  httpuv::runServer("0.0.0.0", port, app)
+  httpuv::runServer(host, port, app)
   invisible(NULL)
+}
+
+#' The request handler behind [view_tardoc_db()]
+#'
+#' Separate from the server so what it will and will not answer can be tested
+#' by calling it with a made-up request, with no network involved.
+#'
+#' @param site_path The docs folder; the only place files are served from.
+#' @param session_path The generated session page served at `/`.
+#' @param port The port the server listens on, which fixes the origins it trusts.
+#' @param llm_chat An ellmer `Chat`, or `NULL`.
+#' @param sql_log Environment collecting the SQL the chat ran.
+#' @return A list with a `call` function, as [httpuv::runServer()] expects.
+#' @keywords internal
+.analytics_app <- function(site_path, session_path, port, llm_chat, sql_log) {
+  # Answers only to pages this server itself served. "*" let any website the
+  # user visited POST to /chat on localhost and spend their LLM credentials.
+  allow_origin <- function(req) {
+    o <- req$HTTP_ORIGIN
+    if (!is.null(o) && .origin_allowed(o, port)) o else NULL
+  }
+  with_cors <- function(headers, req) {
+    o <- allow_origin(req)
+    if (!is.null(o)) headers[["Access-Control-Allow-Origin"]] <- o
+    headers
+  }
+
+  serve_file <- function(fp, req) {
+    mime <- switch(tools::file_ext(fp),
+      html = "text/html", json = "application/json",
+      js = "application/javascript", "application/octet-stream")
+    list(status  = 200L,
+         headers = with_cors(list("Content-Type" = mime), req),
+         body    = readBin(fp, "raw", file.info(fp)$size))
+  }
+
+  app <- list(call = function(req) {
+    p <- req$PATH_INFO
+
+    if (req$REQUEST_METHOD == "OPTIONS")
+      return(list(status = 204L,
+                  headers = with_cors(
+                    list("Access-Control-Allow-Methods" = "POST, GET, OPTIONS",
+                         "Access-Control-Allow-Headers" = "Content-Type"), req),
+                  body = ""))
+
+    if (p == "/chat" && req$REQUEST_METHOD == "POST") {
+      # A request from another origin never reaches the model. Requests with no
+      # Origin header (curl, same-origin GET-style fetches) are not browsers
+      # acting for a stranger's page.
+      if (!is.null(req$HTTP_ORIGIN) && !.origin_allowed(req$HTTP_ORIGIN, port))
+        return(list(status = 403L, headers = list("Content-Type" = "text/plain"),
+                    body = "Forbidden origin."))
+      if (is.null(llm_chat))
+        return(.json_resp(list(error = "LLM not configured.")))
+      tryCatch({
+        body <- jsonlite::fromJSON(rawToChar(req$rook.input$read()))
+        if (isTRUE(body$clear)) {
+          llm_chat$set_turns(list())
+          sql_log$calls <- list()
+          return(.json_resp(list(response = "Conversation cleared.")))
+        }
+        sql_log$calls <- list()
+        response      <- llm_chat$chat(body$message, echo = FALSE)
+        .json_resp(list(response = response, sql_calls = sql_log$calls))
+      }, error = function(e) .json_resp(list(error = conditionMessage(e))))
+    } else {
+      fp <- if (p == "/" || p == "" || p == "/analytics") session_path
+            else .safe_site_file(site_path, p)
+      if (!is.null(fp) && file.exists(fp) && !dir.exists(fp)) serve_file(fp, req) else
+        list(status = 404L, headers = list("Content-Type" = "text/plain"),
+             body = "Not found")
+    }
+  })
+
+  app
 }
 
 #' Expose the tardoc database as an MCP server for Claude Desktop / Claude Code
@@ -395,8 +481,11 @@ view_tardoc_db <- function(project_path = ".", site_dir = "tardoc",
 #' @param project_path Path to the targets project root.
 #' @param site_dir     Subfolder used in [document_targets()].
 #' @param port         MCP server port. Default `8765`.
+#' @param host         Address to listen on. Default `"127.0.0.1"`: only this
+#'   machine. The database it exposes holds your pipeline's code and notes.
 #' @export
-serve_tardoc_mcp <- function(project_path = ".", site_dir = "tardoc", port = 8765) {
+serve_tardoc_mcp <- function(project_path = ".", site_dir = "tardoc", port = 8765,
+                             host = "127.0.0.1") {
   if (!requireNamespace("callr", quietly = TRUE))
     stop("'callr' is required: install.packages('callr')")
   if (!requireNamespace("duckdb", quietly = TRUE))
@@ -421,12 +510,12 @@ serve_tardoc_mcp <- function(project_path = ".", site_dir = "tardoc", port = 876
 
   proc <- tryCatch(
     callr::r_bg(
-      func = function(db_path, port) {
+      func = function(db_path, port, host) {
         con <- duckdb::dbConnect(duckdb::duckdb(), db_path, read_only = TRUE)
         DBI::dbExecute(con, "INSTALL duckdb_mcp FROM community; LOAD duckdb_mcp;")
-        DBI::dbExecute(con, sprintf("CALL mcp_serve('0.0.0.0', %d);", port))
+        DBI::dbExecute(con, sprintf("CALL mcp_serve('%s', %d);", host, port))
       },
-      args = list(db_path, port),
+      args = list(db_path, port, host),
       supervise = TRUE
     ),
     error = function(e) {
@@ -455,31 +544,25 @@ serve_tardoc_mcp <- function(project_path = ".", site_dir = "tardoc", port = 876
 #' @keywords internal
 .build_analytics_data <- function(targets_data, function_names, cfg) {
   target_rows <- lapply(targets_data$target_names, function(tn) {
-    manifest_row <- dplyr::filter(targets_data$manifest, .data$name == tn)
-    meta_row     <- dplyr::filter(targets_data$meta,     .data$name == tn)
-    dep          <- get_target_network_dependencies(
+    dep <- get_target_network_dependencies(
       tn, targets_data$network, max_depth_up = 1, max_depth_down = 1
     )
-    desc       <- .ad_pull_desc(manifest_row)
-    command    <- dplyr::pull(manifest_row, "command")
-    status     <- .target_status(tn, targets_data$meta, targets_data$outdated,
-                                isTRUE(targets_data$has_store))
-    last_built <- as.character(meta_row$time)
+    b <- .target_basics(tn, targets_data)
     list(
-      name = tn, description = if (is.na(desc)) "" else desc,
-      command = command, status = status,
-      last_built = if (is.na(last_built)) "" else last_built,
+      name = tn, description = b$description,
+      command = b$command, status = b$status,
+      last_built = b$last_built,
       n_upstream = length(dep$upstream), n_downstream = length(dep$downstream),
       notes = read_note(tn, "targets", cfg),
       upstream = as.list(dep$upstream), downstream = as.list(dep$downstream)
     )
   })
 
-  r_files <- list.files(cfg$r_scripts_dir, pattern = "\\.R$", full.names = TRUE)
+  r_files <- .function_r_files(cfg)
   func_rows <- lapply(function_names, function(fn) {
-    src  <- .ad_find_src(fn, r_files)
+    src  <- .find_function_file(fn, r_files)
     docs <- if (!is.null(src)) suppressWarnings(get_fn_docs(fn, src)) else NULL
-    list(name = fn, description = if (!is.null(docs)) .ad_extract_desc(docs) else "",
+    list(name = fn, description = if (!is.null(docs)) .docs_description(docs) else "",
          source_file = if (!is.null(src)) basename(src) else "",
          notes = read_note(fn, "functions", cfg))
   })
@@ -499,8 +582,7 @@ serve_tardoc_mcp <- function(project_path = ".", site_dir = "tardoc", port = 876
 
 .json_resp <- function(data) {
   list(status  = 200L,
-       headers = list("Content-Type" = "application/json",
-                      "Access-Control-Allow-Origin" = "*"),
+       headers = list("Content-Type" = "application/json"),
        body    = jsonlite::toJSON(data, auto_unbox = TRUE))
 }
 
@@ -519,7 +601,19 @@ serve_tardoc_mcp <- function(project_path = ".", site_dir = "tardoc", port = 876
       }, error = function(e) "")
     } else ""
   )
-  tryCatch(chat$.__enclos_env__$private$system_prompt <- sys, error = function(e) NULL)
+  # ellmer's documented setter. The private field this used to write is not
+  # part of its API and an ellmer update could drop it without an error; that
+  # remains only as a fallback for versions that predate the setter.
+  ok <- tryCatch({
+    if (is.function(chat$set_system_prompt)) {
+      chat$set_system_prompt(sys); TRUE
+    } else {
+      chat$.__enclos_env__$private$system_prompt <- sys; TRUE
+    }
+  }, error = function(e) FALSE)
+  if (!ok) message("Could not set the chat's system prompt -- it will not know the ",
+                   "table names up front, but can still query the database.")
+  invisible(ok)
 }
 
 .patch_sql_tool_logging <- function(chat, con, sql_log) {
@@ -545,28 +639,6 @@ serve_tardoc_mcp <- function(project_path = ".", site_dir = "tardoc", port = 876
   chat$register_tool(sql_tool)
 }
 
-.ad_pull_desc <- function(r) {
-  if (!"description" %in% names(r)) return(NA_character_)
-  v <- dplyr::pull(r, "description")
-  if (length(v) == 0 || is.na(v) || nchar(trimws(v)) == 0) NA_character_ else v
-}
-.ad_find_src <- function(fn, r_files) {
-  for (f in r_files) {
-    e <- new.env(parent = globalenv())
-    tryCatch(source(f, local = e), error = function(e) NULL)
-    if (fn %in% ls(e)) return(f)
-  }
-  NULL
-}
-.ad_extract_desc <- function(docs) {
-  lines <- strsplit(docs, "\n")[[1]]
-  in_d  <- FALSE; dl <- character()
-  for (l in lines) {
-    if (grepl("^##\\s+Description", l, ignore.case = TRUE)) { in_d <- TRUE; next }
-    if (in_d) { if (grepl("^##", l)) break; dl <- c(dl, l) }
-  }
-  trimws(paste(dl, collapse = "\n"))
-}
 
 `%||%` <- function(x, y) if (is.null(x)) y else x
 
@@ -620,8 +692,8 @@ serve_tardoc_mcp <- function(project_path = ".", site_dir = "tardoc", port = 876
 
 #' Find a free TCP port starting from the given port
 #' @keywords internal
-.find_free_port <- function(start_port) {
-  for (p in start_port:(start_port + 20)) {
+.find_free_port <- function(start_port, avoid = integer()) {
+  for (p in setdiff(start_port:(start_port + 20), avoid)) {
     tryCatch({
       s <- serverSocket(p)
       close(s)
@@ -629,4 +701,85 @@ serve_tardoc_mcp <- function(project_path = ".", site_dir = "tardoc", port = 876
     }, error = function(e) NULL)
   }
   start_port  # fallback to original if nothing found
+}
+
+#' A random session token
+#'
+#' From the operating system's entropy source where there is one. The token
+#' used to come from `sample()`, which a user's earlier `set.seed()` makes the
+#' same every session.
+#'
+#' @return A 32-character hex string.
+#' @keywords internal
+.session_token <- function() {
+  bytes <- tryCatch(
+    if (file.exists("/dev/urandom")) {
+      con <- file("/dev/urandom", "rb"); on.exit(close(con))
+      readBin(con, "raw", 16L)
+    },
+    error = function(e) NULL
+  )
+  if (length(bytes) != 16L) {
+    bytes <- as.raw(floor(stats::runif(16L, 0, 256)))
+  }
+  paste(as.character(bytes), collapse = "")
+}
+
+#' Is a browser's Origin one of this server's own?
+#'
+#' @param origin The request's `Origin` header.
+#' @param port The port the HTML server listens on.
+#' @return `TRUE` for `http://localhost:<port>` and `http://127.0.0.1:<port>`.
+#' @keywords internal
+.origin_allowed <- function(origin, port) {
+  origin %in% sprintf("http://%s:%d", c("localhost", "127.0.0.1"), as.integer(port))
+}
+
+#' Resolve a request path to a file inside the docs folder, or nothing
+#'
+#' The handler used to join the path onto the folder as given, so
+#' `/../../.ssh/id_rsa` -- or its percent-encoded form -- named files outside it.
+#' The path is decoded, resolved, and must still sit inside `site_path`.
+#'
+#' @param site_path The docs folder.
+#' @param path The request's `PATH_INFO`.
+#' @return A file path inside `site_path`, or `NULL`.
+#' @keywords internal
+.safe_site_file <- function(site_path, path) {
+  rel <- tryCatch(utils::URLdecode(sub("^/+", "", path)), error = function(e) "")
+  if (!nzchar(rel) || any(strsplit(rel, "[/\\\\]")[[1]] == "..")) return(NULL)
+  root <- normalizePath(site_path, winslash = "/", mustWork = FALSE)
+  fp   <- normalizePath(file.path(root, rel), winslash = "/", mustWork = FALSE)
+  if (identical(fp, root) || !startsWith(fp, paste0(root, "/"))) return(NULL)
+  fp
+}
+
+#' Is the analytics database older than the docs it describes?
+#'
+#' `search_index.json` is rewritten by every `document_targets()` run and by
+#' nothing else, so a database built before it is out of date.
+#'
+#' @param site_path The docs folder.
+#' @param db_path The database file.
+#' @return `TRUE` when the database exists and is older than the index.
+#' @keywords internal
+.db_is_stale <- function(site_path, db_path) {
+  idx <- file.path(site_path, "search_index.json")
+  file.exists(db_path) && file.exists(idx) &&
+    file.mtime(db_path) < file.mtime(idx)
+}
+
+#' Did the existing database have any community-extension layer?
+#'
+#' @param db_path The database file.
+#' @return `TRUE` if its `_meta` records embeddings, FAISS or MCP.
+#' @keywords internal
+.db_had_extensions <- function(db_path) {
+  if (!file.exists(db_path) || !requireNamespace("duckdb", quietly = TRUE)) return(FALSE)
+  tryCatch({
+    con <- DBI::dbConnect(duckdb::duckdb(), db_path, read_only = TRUE)
+    on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+    m <- DBI::dbGetQuery(con, "SELECT * FROM _meta LIMIT 1")
+    any(isTRUE(m$has_embeddings[1]), isTRUE(m$has_faiss[1]), isTRUE(m$has_mcp[1]))
+  }, error = function(e) FALSE)
 }

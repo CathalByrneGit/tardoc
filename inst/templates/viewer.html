@@ -256,6 +256,11 @@ a{color:#6d28d9;text-decoration:none}a:hover{text-decoration:underline}
 .hist-range{font-size:12px;color:#868e96}
 .spark{display:block}
 
+a.report-btn{display:inline-block;background:#6d28d9;color:#fff;padding:7px 14px;
+  border-radius:6px;font-size:13px;font-weight:600;text-decoration:none;margin:2px 8px 6px 0}
+a.report-btn:hover{background:#5b21b6;text-decoration:none}
+#rf-panel a.report-btn{margin:10px 0 0;color:#fff}
+
 /* Phones: a 280px sidebar beside the content leaves ~100px for it, so the
    sidebar becomes a bar across the top and its navigation folds behind a
    Menu button. Opening it is deliberate (the button, or focusing search);
@@ -401,6 +406,7 @@ const PROFILE  = {{PROFILE_JSON}};
 const HISTORY  = {{HISTORY_JSON}};
 const OVERVIEW = {{OVERVIEW_JSON}};
 const COVERAGE = {{COVERAGE_JSON}};
+const REPORTS  = {{REPORTS_JSON}};
 
 const PAGE_MAP = {};
 PAGES.forEach(p => { PAGE_MAP[p.type + ':' + p.name] = p; });
@@ -751,6 +757,12 @@ function rfOpen(id) {
     '<button class="close" aria-label="Close">&times;</button>' +
     '<h3>' + rfEsc(n.label) + '</h3>' +
     '<div class="tags">' + tags.join('') + '</div>' +
+    // Near the top: it is the thing a reader came for, and the panel scrolls.
+    (REPORTS[n.id]
+      ? '<a class="report-btn" target="_blank" rel="noopener" href="' + rfEsc(REPORTS[n.id].href) + '">' +
+        (REPORTS[n.id].type === 'pdf' ? 'Open PDF' : 'Open report') + ' &#8599;</a>' +
+        (REPORTS[n.id].stale ? '<p class="none">out of date</p>' : '')
+      : '') +
     (n.description ? '<h4>Description</h4><p>' + rfEsc(n.description) + '</p>'
                    : '<p class="none">no description</p>') +
     (n.branched ? '<h4>Branching</h4><pre>' + rfEsc(n.pattern) + '</pre>' : '') +
@@ -1372,6 +1384,17 @@ function loadPage(type, name) {
   });
 
   enhanceCodeBlocks(contentEl, name);
+
+  // A published report: the page's markdown link is relative to targets/, so
+  // from the viewer it is one level up. Restyled as a button, in a new tab.
+  contentEl.querySelectorAll('a').forEach(a => {
+    const href = a.getAttribute('href') || '';
+    if (href.indexOf('../reports/') !== 0) return;
+    a.setAttribute('href', href.slice(3));
+    a.setAttribute('target', '_blank');
+    a.setAttribute('rel', 'noopener');
+    a.classList.add('report-btn');
+  });
 
   // Intercept .md links — route through loadPage
   contentEl.querySelectorAll('a').forEach(a => {

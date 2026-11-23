@@ -150,6 +150,26 @@
   )
 }
 
+#' The handful of target fields the analytics tables share
+#'
+#' Three builders (the JSON, the WASM viewer's data, the DuckDB tables) each
+#' re-derived these from `tar_meta()` by hand and each assumed a metadata row
+#' exists for every target. After a partial `tar_make(names = ...)` some do
+#' not, and `as.character(<empty>)` fed to `if (is.na(...))` stopped the whole
+#' run with "argument is of length zero". [.target_facts()] already copes with a
+#' missing row, so they now ask it.
+#'
+#' @param name Target name.
+#' @param targets_data Output of [load_targets_data()].
+#' @return A list with `description`, `command`, `status` and `last_built`,
+#'   all character, `""` where unknown.
+#' @keywords internal
+.target_basics <- function(name, targets_data) {
+  f <- .target_facts(name, targets_data)
+  list(description = f$description, command = f$command,
+       status = f$status, last_built = f$last_built)
+}
+
 #' What the target did on the most recent `tar_make()`
 #'
 #' Distinct from status: "skipped" last run and "up to date" now are different

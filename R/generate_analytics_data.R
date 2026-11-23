@@ -18,26 +18,19 @@ generate_analytics_data <- function(targets_data, function_names, cfg) {
 
   # ---- targets table --------------------------------------------------------
   target_rows <- lapply(targets_data$target_names, function(target_name) {
-    manifest_row <- dplyr::filter(targets_data$manifest, .data$name == target_name)
-    meta_row     <- dplyr::filter(targets_data$meta,     .data$name == target_name)
-    dep          <- get_target_network_dependencies(
+    dep <- get_target_network_dependencies(
       target_name, targets_data$network,
       max_depth_up = Inf, max_depth_down = Inf
     )
 
-    description <- .pull_description_a(manifest_row)
-    command     <- dplyr::pull(manifest_row, "command")
-    status      <- .target_status(target_name, targets_data$meta,
-                                 targets_data$outdated,
-                                 isTRUE(targets_data$has_store))
-    last_built  <- as.character(meta_row$time)
+    b <- .target_basics(target_name, targets_data)
 
     list(
       name          = target_name,
-      description   = if (is.na(description)) "" else description,
-      command       = command,
-      status        = status,
-      last_built    = if (is.na(last_built)) "" else last_built,
+      description   = b$description,
+      command       = b$command,
+      status        = b$status,
+      last_built    = b$last_built,
       n_upstream    = length(dep$upstream),
       n_downstream  = length(dep$downstream),
       notes         = read_note(target_name, "targets", cfg)
@@ -45,12 +38,12 @@ generate_analytics_data <- function(targets_data, function_names, cfg) {
   })
 
   # ---- functions table ------------------------------------------------------
-  r_files <- list.files(cfg$r_scripts_dir, pattern = "\\.R$", full.names = TRUE)
+  r_files <- .function_r_files(cfg)
 
   function_rows <- lapply(function_names, function(fn_name) {
-    src_file   <- .find_src_file(fn_name, r_files)
+    src_file   <- .find_function_file(fn_name, r_files)
     docs       <- if (!is.null(src_file)) suppressWarnings(get_fn_docs(fn_name, src_file)) else NULL
-    short_desc <- if (!is.null(docs)) .extract_desc(docs) else ""
+    short_desc <- if (!is.null(docs)) .docs_description(docs) else ""
 
     list(
       name        = fn_name,
@@ -83,34 +76,3 @@ generate_analytics_data <- function(targets_data, function_names, cfg) {
 }
 
 # ---- private ----------------------------------------------------------------
-
-.pull_description_a <- function(manifest_row) {
-  if (!"description" %in% names(manifest_row)) return(NA_character_)
-  val <- dplyr::pull(manifest_row, "description")
-  if (length(val) == 0 || is.na(val) || nchar(trimws(val)) == 0) NA_character_ else val
-}
-
-.find_src_file <- function(func_name, r_files) {
-  for (f in r_files) {
-    env <- new.env(parent = globalenv())
-    tryCatch(source(f, local = env), error = function(e) NULL)
-    if (func_name %in% ls(env)) return(f)
-  }
-  NULL
-}
-
-.extract_desc <- function(docs_md) {
-  lines      <- strsplit(docs_md, "\n")[[1]]
-  in_desc    <- FALSE
-  desc_lines <- character()
-  for (line in lines) {
-    if (grepl("^##\\s+Description", line, ignore.case = TRUE)) {
-      in_desc <- TRUE; next
-    }
-    if (in_desc) {
-      if (grepl("^##", line)) break
-      desc_lines <- c(desc_lines, line)
-    }
-  }
-  trimws(paste(desc_lines, collapse = "\n"))
-}
