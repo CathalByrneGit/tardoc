@@ -35,6 +35,7 @@ Useful arguments:
 | `pkg_desc` | `""` | Description for `llms.txt` |
 | `repo_url` | `NULL` | Repo base URL for source links, e.g. `"https://github.com/user/repo/blob/main/"` |
 | `group_by` | `"auto"` | Grouping signal for the graph — see [Grouping the graph](viewer.html#sec:grouping-the-graph) |
+| `reports` | `FALSE` | Publish what file targets produced — a rendered report — and link it from the target's page. See [Publishing](publishing.html#sec:publishing-reports) |
 | `code_dirs` | `NULL` | Where your function code lives, if not `R/` — see below |
 | `check_outdated` | `TRUE` | Run `tar_outdated()` for freshness status |
 | `llm` | `FALSE` | Auto-generate missing descriptions and function explanations |

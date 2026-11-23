@@ -28,6 +28,16 @@
 #' @param llm_api_key   API key. `NULL` reads the env var.
 #' @param llm_base_url  Base URL for `"openai_compatible"` provider (e.g. a
 #'   llama.cpp server: `"http://localhost:8080/v1"`).
+#' @param reports       Publish what file targets produced -- the rendered
+#'   report of a `tarchetypes::tar_render()` or `tar_quarto()` target, or any
+#'   `format = "file"` target that writes an `.html` or `.pdf`. `FALSE` (the
+#'   default), `TRUE` for every such target, or a character vector of target
+#'   names. Outputs are copied to `tardoc/reports/<target>/` with their
+#'   supporting folders, and the target's page and the viewer get an
+#'   **Open report** link -- only for a target that has built without error;
+#'   an out-of-date one is marked as such. Off by default because a report can
+#'   hold data you would not want on a public site, and the docs folder is what
+#'   gets deployed. With no store nothing is published.
 #' @param llm_refresh   Logical. With `llm = TRUE`, regenerate every description
 #'   and explanation instead of keeping what an earlier run produced. By default
 #'   a target already described on its page is left alone and a function is
@@ -76,6 +86,7 @@ document_targets <- function(project_path  = ".",
                               llm_api_key   = NULL,
                               llm_base_url  = NULL,
                               llm_refresh   = FALSE,
+                              reports       = FALSE,
                               check_outdated = TRUE,
                               group_by      = "auto",
                               code_dirs     = NULL) {
@@ -84,6 +95,8 @@ document_targets <- function(project_path  = ".",
   setup_site_dirs(cfg)
 
   targets_data   <- load_targets_data(cfg, check_outdated = check_outdated)
+  # Before the pages: each target's page links to what it published.
+  targets_data   <- .publish_reports(targets_data, cfg, reports)
   target_names   <- generate_all_target_pages(targets_data, cfg)
   function_names <- generate_all_function_pages(cfg)
 

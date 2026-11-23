@@ -97,6 +97,9 @@ local dependency graph centred on that target with its immediate upstream and
 downstream neighbours. Functions appear with a dashed border and a `function`
 label; clicking any neighbour navigates to it.
 
+A target that produced a report gets an **Output** section with an **Open report**
+button — see [Publishing reports](publishing.html#sec:publishing-reports).
+
 A dynamic target additionally lists **each branch** with its own runtime, size
 and error. Failed branches are always listed, however many branches there are.
 

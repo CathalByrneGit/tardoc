@@ -93,6 +93,10 @@ generate_viewer <- function(targets_data, function_names, cfg,
                  null = "null", na = "null")),
                html, fixed = TRUE)
 
+  html <- gsub("{{REPORTS_JSON}}",
+               esc(jsonlite::toJSON(.reports_payload(targets_data$reports),
+                                    auto_unbox = TRUE)),
+               html, fixed = TRUE)
   html <- gsub("{{COVERAGE_JSON}}",
                esc(jsonlite::toJSON(
                  .doc_coverage(target_pages, function_pages), auto_unbox = TRUE)),
@@ -221,6 +225,17 @@ generate_viewer <- function(targets_data, function_names, cfg,
     targets   = list(total = length(target_pages),   missing = nm(target_pages, t_ok)),
     functions = list(total = length(function_pages), missing = nm(function_pages, f_ok))
   )
+}
+
+#' What the viewer needs to know about published reports
+#'
+#' @param reports `targets_data$reports`, possibly `NULL`.
+#' @return A named list (an empty JSON object when there are none) of `href`,
+#'   `type` and `stale` per target.
+#' @keywords internal
+.reports_payload <- function(reports) {
+  if (!length(reports)) return(structure(list(), names = character()))
+  lapply(reports, function(r) list(href = r$href, type = r$type, stale = isTRUE(r$stale)))
 }
 
 #' Keep named fields as JSON arrays

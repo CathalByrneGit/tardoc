@@ -62,8 +62,10 @@ generate_llms_txt <- function(targets_data,
                     "### ", target_name, "\n\n",
                     if (!is.na(description)) paste0("> ", description, "\n\n") else "",
                     "- **Upstream:** ",   upstream,   "\n",
-                    "- **Downstream:** ", downstream, "\n\n",
-                    "**Command:**\n\n",
+                    "- **Downstream:** ", downstream, "\n",
+                    if (!is.null(targets_data$reports[[target_name]]))
+                      paste0("- **Output:** tardoc/", targets_data$reports[[target_name]]$href, "\n"),
+                    "\n**Command:**\n\n",
                     "```r\n", command_str, "\n```\n\n"
     )
   }

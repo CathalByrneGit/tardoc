@@ -43,7 +43,8 @@ generate_all_target_pages <- function(targets_data, cfg) {
     generated_block <- .build_target_generated_block(
       target_name, .target_facts(target_name, targets_data),
       functions, dependency, repo_link,
-      branches = .target_branches(target_name, targets_data$meta)
+      branches = .target_branches(target_name, targets_data$meta),
+      output   = .output_section(target_name, targets_data$reports[[target_name]])
     )
 
     out_path <- file.path(cfg$targets_dir, paste0(target_name, ".md"))
@@ -65,7 +66,8 @@ generate_all_target_pages <- function(targets_data, cfg) {
 .build_target_generated_block <- function(target_name, facts,
                                           functions, dependency,
                                           repo_link = "",
-                                          branches = NULL) {
+                                          branches = NULL,
+                                          output = "") {
   fn_links <- if (nrow(functions) == 0) {
     "_No distinct functions identified._"
   } else {
@@ -78,6 +80,7 @@ generate_all_target_pages <- function(targets_data, cfg) {
     .facts_table(facts),
     .facts_sections(facts),
     if (is.null(branches)) "" else .branches_section(branches),
+    output,
     "## Command\n\n",
     "```r\n", facts$command, "\n```\n\n",
     "## Functions called\n\n",

@@ -36,6 +36,8 @@ generate_search_index <- function(targets_data, function_names, cfg) {
       status      = status,
       # The badge shows the label; the class is keyed off `status`.
       status_label = .status_label(status),
+      # Where the target's published report is, relative to the docs folder.
+      output      = targets_data$reports[[target_name]]$href %||% "",
       file        = paste0("targets/", target_name, ".md")
     )
   })
