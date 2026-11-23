@@ -34,6 +34,7 @@ list(
   tar_target(
     report,
     render_report(station_summary, drift_flags),
+    format = "file",
     description = "Final station report rendered for the operations team"
   )
 )

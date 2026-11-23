@@ -56,6 +56,11 @@ What gets a link:
   points outside the project is ignored, not copied into a site that gets
   deployed.
 
+The [live demo](example/) does this: its `report` target writes an HTML page, the
+workflow passes `reports = TRUE`, and the report's page there has an **Open report**
+button. A `tar_render()` target is published the same way — it is the same kind of
+target.
+
 It is off by default on purpose. A report can contain data you would not put on a
 public site, and the docs folder is exactly what the Pages workflow publishes.
 Turn it on knowing that, and name the targets you want rather than using `TRUE`
@@ -75,7 +80,7 @@ The [live demo](example/) is the example pipeline in
 [`inst/examples/station-monitoring`](https://github.com/CathalByrneGit/tardoc/tree/main/inst/examples/station-monitoring),
 built and documented by
 [`.github/workflows/github-pages.yml`](https://github.com/CathalByrneGit/tardoc/blob/main/.github/workflows/github-pages.yml)
-on every push to `main`. Nothing in it is hand-written, and it doubles as the
+on every push to `main`, report included. Nothing in it is hand-written, and it doubles as the
 end-to-end test that `document_targets()` works on a clean machine with no store
 to start from.
 
