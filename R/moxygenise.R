@@ -44,7 +44,7 @@ get_fn_docs <- function(fn_name, file) {
   # Write to a temp file so Rd2md::read_rdfile() can parse it properly
   tmp <- tempfile(fileext = ".Rd")
   on.exit(unlink(tmp), add = TRUE)
-  writeLines(rd_codes[[target]], tmp)
+  .write_lines_utf8(c("\\encoding{UTF-8}", rd_codes[[target]]), tmp)
 
   rd <- Rd2md::read_rdfile(tmp)
   Rd2md::as_markdown(rd)
@@ -87,7 +87,7 @@ get_fn_docs <- function(fn_name, file) {
 .write_rd <- function(rd_codes, manpath) {
   mapply(function(text, topic) {
     message("  Rd: ", topic)
-    writeLines(text, file.path(manpath, topic))
+    .write_lines_utf8(text, file.path(manpath, topic))
   }, rd_codes, names(rd_codes))
   invisible(NULL)
 }

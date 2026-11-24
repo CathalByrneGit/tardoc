@@ -228,7 +228,7 @@ generate_tardoc_db <- function(targets_data, function_names, cfg,
     )
   )
   out <- file.path(cfg$site_path, "tardoc_mcp_config.json")
-  writeLines(jsonlite::toJSON(config, pretty = TRUE, auto_unbox = TRUE), out)
+  .write_lines_utf8(jsonlite::toJSON(config, pretty = TRUE, auto_unbox = TRUE), out)
   invisible(out)
 }
 

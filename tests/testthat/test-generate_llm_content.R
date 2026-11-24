@@ -164,3 +164,31 @@ test_that("an edited function is explained again", {
   suppressMessages(generate_llm_content(d$td, "add", d$cfg, llm_chat = ch))
   expect_match(paste(readLines(file.path(d$cfg$functions_dir, "add.md")), collapse = "\n"), "v2", fixed = TRUE)
 })
+
+test_that("a plain rerun restores a cached explanation without a model", {
+  skip_if_not_installed("ellmer")
+  d <- local_documented()
+  suppressMessages(generate_llm_content(d$td, "add", d$cfg, llm_chat = stub_chat(reply = "Adds two numbers.")))
+  suppressMessages(generate_all_function_pages(d$cfg))        # a plain run rewrites the page
+  page <- file.path(d$cfg$functions_dir, "add.md")
+  expect_false(grepl("Adds two numbers.", paste(readLines(page), collapse = "\n"), fixed = TRUE))
+
+  expect_equal(suppressMessages(.restore_cached_explanations("add", d$cfg)), 1L)
+  expect_match(paste(readLines(page), collapse = "\n"), "Adds two numbers.", fixed = TRUE)
+})
+
+test_that("an edited function gets no stale explanation back", {
+  skip_if_not_installed("ellmer")
+  d <- local_documented()
+  suppressMessages(generate_llm_content(d$td, "add", d$cfg, llm_chat = stub_chat(reply = "v1")))
+  f <- file.path(d$cfg$r_scripts_dir, "helpers.R")
+  writeLines(sub("x + y", "x + y + 1", readLines(f), fixed = TRUE), f)
+  suppressMessages(generate_all_function_pages(d$cfg))
+  expect_equal(suppressMessages(.restore_cached_explanations("add", d$cfg)), 0L)
+  expect_false(grepl("v1", paste(readLines(file.path(d$cfg$functions_dir, "add.md")), collapse = "\n"), fixed = TRUE))
+})
+
+test_that("with no cache, restoring does nothing", {
+  d <- local_documented()
+  expect_equal(.restore_cached_explanations("add", d$cfg), 0L)
+})

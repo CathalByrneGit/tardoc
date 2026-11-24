@@ -67,7 +67,7 @@ generate_search_index <- function(targets_data, function_names, cfg) {
   )
 
   out_path <- file.path(cfg$site_path, "search_index.json")
-  writeLines(jsonlite::toJSON(index, auto_unbox = TRUE, pretty = TRUE),
+  .write_lines_utf8(jsonlite::toJSON(index, auto_unbox = TRUE, pretty = TRUE),
              out_path)
   message("Search index written: ", out_path)
   invisible(out_path)

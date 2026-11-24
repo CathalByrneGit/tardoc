@@ -117,6 +117,9 @@ document_targets <- function(project_path  = ".",
       base_url       = llm_base_url,
       refresh        = llm_refresh
     )
+  } else {
+    # The pages were just rewritten; bring back what an earlier run explained.
+    .restore_cached_explanations(function_names, cfg)
   }
 
   # Descriptions already on the pages (written by an earlier llm = TRUE run, or
@@ -139,7 +142,7 @@ document_targets <- function(project_path  = ".",
   analytics_data <- .build_analytics_data(targets_data, function_names, cfg)
 
   # Write the JSON file (used by server analytics fallback)
-  writeLines(
+  .write_lines_utf8(
     jsonlite::toJSON(analytics_data, auto_unbox = TRUE),
     file.path(cfg$site_path, "tardoc_analytics.json")
   )
@@ -259,7 +262,7 @@ view_tardoc_db <- function(project_path = ".", site_dir = "tardoc",
       generate_tardoc_db(td, fn, cfg, db_extensions = db_extensions)
       # Regenerate analytics JSON so sidebar stays in sync with new functions
       analytics_data <- .build_analytics_data(td, fn, cfg)
-      writeLines(
+      .write_lines_utf8(
         jsonlite::toJSON(analytics_data, auto_unbox = TRUE),
         file.path(site_path, "tardoc_analytics.json")
       )
@@ -501,7 +504,7 @@ serve_tardoc_mcp <- function(project_path = ".", site_dir = "tardoc", port = 876
   # Print the Claude Desktop config for the user
   if (file.exists(cfg_path)) {
     message("Claude Desktop MCP config (add 'tardoc' to your claude_desktop_config.json):\n")
-    cat(paste(readLines(cfg_path, warn = FALSE), collapse = "\n"), "\n\n")
+    cat(.read_text_utf8(cfg_path), "\n\n")
   }
 
   message("Starting MCP server on port ", port, "...")

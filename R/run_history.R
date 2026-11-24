@@ -46,7 +46,7 @@ record_run_snapshot <- function(targets_data, cfg, max_runs = 50L) {
     history <- history[seq(length(history) - max_runs + 1L, length(history))]
   }
 
-  writeLines(jsonlite::toJSON(history, auto_unbox = TRUE, null = "null"), path)
+  .write_lines_utf8(jsonlite::toJSON(history, auto_unbox = TRUE, null = "null"), path)
   message("Run history: ", length(history),
           if (length(history) == 1) " snapshot" else " snapshots", " in ", path)
   invisible(history)

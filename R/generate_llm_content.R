@@ -123,7 +123,7 @@ generate_llm_content <- function(targets_data, function_names, cfg,
 }
 
 .write_llm_cache <- function(cfg, cache) {
-  writeLines(jsonlite::toJSON(cache, auto_unbox = TRUE, pretty = TRUE), .llm_cache_path(cfg))
+  .write_lines_utf8(jsonlite::toJSON(cache, auto_unbox = TRUE, pretty = TRUE), .llm_cache_path(cfg))
 }
 .make_ellmer_chat <- function(provider, model, api_key, base_url, system_prompt = NULL) {
   args <- list()
@@ -159,7 +159,7 @@ generate_llm_content <- function(targets_data, function_names, cfg,
 
 .inject_description <- function(path, name, desc) {
   if (!file.exists(path)) return(invisible(NULL))
-  lines <- readLines(path, warn = FALSE)
+  lines <- .read_lines_utf8(path)
   title <- which(lines == paste0("# Target: ", name))
   if (!length(title)) return(invisible(NULL))
   title <- title[1]
@@ -178,12 +178,12 @@ generate_llm_content <- function(targets_data, function_names, cfg,
 
   lines <- append(lines, c("", paste0("> ", gsub("[[:space:]]+", " ", desc))),
                   after = title)
-  writeLines(lines, path)
+  .write_lines_utf8(lines, path)
 }
 
 .inject_explanation <- function(path, explanation) {
   if (!file.exists(path)) return(invisible(NULL))
-  lines   <- readLines(path, warn = FALSE)
+  lines   <- .read_lines_utf8(path)
   end_tag <- "<!-- tardoc:end -->"
 
   # Drop any previous block first, so re-running replaces it instead of
@@ -209,7 +209,7 @@ generate_llm_content <- function(targets_data, function_names, cfg,
   } else {
     c(lines, block)
   }
-  writeLines(lines, path)
+  .write_lines_utf8(lines, path)
 }
 
 .has_description <- function(r) {
@@ -218,6 +218,38 @@ generate_llm_content <- function(targets_data, function_names, cfg,
   length(v) > 0 && !is.na(v) && nchar(trimws(v)) > 0
 }
 
+
+#' Put cached function explanations back on the pages
+#'
+#' The function pages are rewritten on every run, which drops an explanation
+#' written by an earlier `llm = TRUE` run. The cache (`llm_cache.json`) still
+#' has it, keyed on the function's source and docs, so a plain rerun restores
+#' it for free -- no model, no network. A function whose source or docs changed
+#' has a different key and gets no explanation until the next `llm = TRUE` run,
+#' rather than a stale one.
+#'
+#' @param function_names Functions with a page.
+#' @param cfg A site config list.
+#' @return The number of explanations restored, invisibly.
+#' @keywords internal
+.restore_cached_explanations <- function(function_names, cfg) {
+  cache <- .read_llm_cache(cfg)
+  if (!length(cache) || !length(function_names)) return(invisible(0L))
+  r_files <- .function_r_files(cfg)
+  n <- 0L
+  for (fn in function_names) {
+    src <- .find_function_file(fn, r_files)
+    if (is.null(src)) next
+    code <- .file_functions(src)[[fn]]$text
+    if (is.null(code)) next
+    docs <- suppressWarnings(get_fn_docs(fn, src))
+    expl <- cache[[.explanation_key(code, docs)]]
+    if (is.null(expl) || !nzchar(expl)) next
+    .inject_explanation(file.path(cfg$functions_dir, paste0(fn, ".md")), expl)
+    n <- n + 1L
+  }
+  invisible(n)
+}
 
 `%||%` <- function(x, y) if (is.null(x)) y else x
 
@@ -243,7 +275,7 @@ generate_llm_content <- function(targets_data, function_names, cfg,
 #' @keywords internal
 .page_description <- function(path) {
   if (!file.exists(path)) return(NA_character_)
-  lines <- readLines(path, warn = FALSE)
+  lines <- .read_lines_utf8(path)
   marker <- which(lines == "<!-- tardoc:generated -->")
   top <- lines[seq_len(if (length(marker)) marker[1] - 1L else min(length(lines), 4L))]
   q <- top[startsWith(top, "> ")]

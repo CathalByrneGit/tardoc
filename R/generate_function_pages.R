@@ -82,7 +82,7 @@ generate_all_function_pages <- function(cfg) {
 #' @keywords internal
 .find_function_line <- function(func_name, r_file) {
   if (!file.exists(r_file)) return(NULL)
-  lines   <- readLines(r_file, warn = FALSE)
+  lines   <- .read_lines_utf8(r_file)
   pattern <- paste0("^", func_name, "\\s*(<-|=)\\s*function")
   hits    <- grep(pattern, lines, perl = TRUE)
   if (length(hits) == 0) return(NULL)

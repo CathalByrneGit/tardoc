@@ -46,7 +46,7 @@ inject_quack_session <- function(cfg, token, quack_port,
   if (!file.exists(tpl))
     stop("analytics.html not found. Run document_targets() first.")
 
-  html <- paste(readLines(tpl, warn = FALSE), collapse = "\n")
+  html <- .read_text_utf8(tpl)
   html <- gsub("__QUACK_TOKEN__", token,                    html, fixed = TRUE)
   html <- gsub("__QUACK_PORT__",  as.character(quack_port), html, fixed = TRUE)
   html <- gsub("__HAS_FAISS__",   tolower(has_faiss),       html, fixed = TRUE)

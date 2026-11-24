@@ -55,12 +55,15 @@
 #'   parsed.
 #' @keywords internal
 .file_functions <- function(path) {
-  exprs <- tryCatch(parse(path, keep.source = TRUE), error = function(e) NULL)
+  src   <- tryCatch(.read_lines_utf8(path), error = function(e) NULL)
+  exprs <- if (is.null(src)) NULL else
+    tryCatch(parse(text = src, keep.source = TRUE, encoding = "UTF-8"),
+             error = function(e) NULL)
   if (is.null(exprs) || !length(exprs)) return(list())
 
   refs <- attr(exprs, "srcref")
   if (is.null(refs)) return(list())
-  lines <- tryCatch(readLines(path, warn = FALSE), error = function(e) NULL)
+  lines <- tryCatch(.read_lines_utf8(path), error = function(e) NULL)
   if (is.null(lines)) return(list())
 
   out <- list()

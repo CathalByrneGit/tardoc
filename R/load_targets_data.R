@@ -54,6 +54,8 @@ load_targets_data <- function(cfg, check_outdated = TRUE) {
     manifest     <- targets::tar_manifest(callr_function = cf)
     network      <- targets::tar_network(targets_only = FALSE, reporter = "silent",
                                          callr_function = cf, store = store)
+    manifest     <- .mark_utf8(manifest)
+    network      <- .mark_utf8(network)
     target_names <- dplyr::pull(manifest, "name")
 
     # Meta needs the store -------------------------------------------------
@@ -61,7 +63,7 @@ load_targets_data <- function(cfg, check_outdated = TRUE) {
 
     progress <- NULL
     if (has_store) {
-      meta <- targets::tar_meta(fields = targets::everything(), store = store)
+      meta <- .mark_utf8(targets::tar_meta(fields = targets::everything(), store = store))
       progress <- tryCatch(targets::tar_progress(store = store),
                            error = function(e) NULL)
       message("Store found -- run metadata loaded.")
