@@ -1,4 +1,8 @@
 # Built by tar_make() and document_targets(); the Pages workflow makes its own.
 _targets/
 report/
-tardoc/
+# Everything tardoc generates, except the one note that is the demo's own words.
+tardoc/*
+!tardoc/notes/
+tardoc/notes/*
+!tardoc/notes/index.md
