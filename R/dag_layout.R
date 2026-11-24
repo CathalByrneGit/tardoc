@@ -82,7 +82,7 @@ dag_layout <- function(nodes, edges, x_spacing = 220, y_spacing = 90) {
   for (l in layers) rank[nodes[layer == l]] <- seq_len(sum(layer == l))
   nbrs_in  <- split(from, factor(to,   levels = nodes))
   nbrs_out <- split(to,   factor(from, levels = nodes))
-  sweep <- function(ls, nbrs) {
+  sweep <- function(rank, ls, nbrs) {
     for (l in ls) {
       mem <- nodes[layer == l]
       if (length(mem) < 2L) next
@@ -94,12 +94,13 @@ dag_layout <- function(nodes, edges, x_spacing = 220, y_spacing = 90) {
       # A node with no neighbour on that side stays where it is.
       bary[is.na(bary)] <- rank[mem][is.na(bary)]
       ord <- order(bary, rank[mem])
-      rank[mem[ord]] <<- seq_along(mem)
+      rank[mem[ord]] <- seq_along(mem)
     }
+    rank
   }
   for (i in seq_len(4L)) {
-    sweep(layers[-1], nbrs_in)
-    sweep(rev(layers)[-1], nbrs_out)
+    rank <- sweep(rank, layers[-1], nbrs_in)
+    rank <- sweep(rank, rev(layers)[-1], nbrs_out)
   }
 
   # Stack within each layer, then centre every column on the tallest one.
