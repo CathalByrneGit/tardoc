@@ -21,19 +21,19 @@
 #' @export
 generate_notes <- function(target_names, function_names, cfg) {
   index_path <- file.path(cfg$notes_dir, "index.md")
-  if (!file.exists(index_path)) writeLines(.overview_stub(), index_path)
+  if (!file.exists(index_path)) .write_lines_utf8(.overview_stub(), index_path)
 
   for (name in target_names) {
     path <- file.path(cfg$notes_targets, paste0(name, ".md"))
     if (!file.exists(path)) {
-      writeLines(.note_stub("target", name), path)
+      .write_lines_utf8(.note_stub("target", name), path)
     }
   }
 
   for (name in function_names) {
     path <- file.path(cfg$notes_functions, paste0(name, ".md"))
     if (!file.exists(path)) {
-      writeLines(.note_stub("function", name), path)
+      .write_lines_utf8(.note_stub("function", name), path)
     }
   }
 
@@ -54,7 +54,7 @@ read_note <- function(name, type = c("targets", "functions"), cfg) {
   dir  <- if (type == "targets") cfg$notes_targets else cfg$notes_functions
   path <- file.path(dir, paste0(name, ".md"))
   if (!file.exists(path)) return("")
-  content <- paste(readLines(path, warn = FALSE), collapse = "\n")
+  content <- .read_text_utf8(path)
   trimws(content)
 }
 
@@ -71,10 +71,7 @@ read_note <- function(name, type = c("targets", "functions"), cfg) {
 read_overview <- function(cfg) {
   path <- file.path(cfg$notes_dir, "index.md")
   if (!file.exists(path)) return("")
-  # Notes are UTF-8 text. Say so, or readLines() returns bytes of unknown
-  # encoding that a non-UTF-8 native locale (Windows) will reinterpret.
-  content <- paste(readLines(path, warn = FALSE, encoding = "UTF-8"),
-                   collapse = "\n")
+  content <- .read_text_utf8(path)
   trimws(content)
 }
 

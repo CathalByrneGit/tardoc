@@ -69,7 +69,7 @@ generate_analytics_data <- function(targets_data, function_names, cfg) {
   )
 
   out_path <- file.path(cfg$site_path, "tardoc_analytics.json")
-  writeLines(jsonlite::toJSON(analytics, auto_unbox = TRUE, pretty = FALSE),
+  .write_lines_utf8(jsonlite::toJSON(analytics, auto_unbox = TRUE, pretty = FALSE),
              out_path)
   message("Analytics data written: ", out_path)
   invisible(out_path)

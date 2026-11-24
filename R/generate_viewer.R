@@ -27,7 +27,7 @@ generate_viewer <- function(targets_data, function_names, cfg,
       name    = name,
       type    = "targets",
       content = if (file.exists(path))
-        paste(readLines(path, warn = FALSE), collapse = "\n") else "",
+        .read_text_utf8(path) else "",
       notes   = read_note(name, "targets", cfg)
     )
   })
@@ -38,15 +38,14 @@ generate_viewer <- function(targets_data, function_names, cfg,
       name    = name,
       type    = "functions",
       content = if (file.exists(path))
-        paste(readLines(path, warn = FALSE), collapse = "\n") else "",
+        .read_text_utf8(path) else "",
       notes   = read_note(name, "functions", cfg)
     )
   })
 
   pages_json <- jsonlite::toJSON(c(target_pages, function_pages), auto_unbox = TRUE)
   index_json <- if (file.exists(file.path(cfg$site_path, "search_index.json")))
-    paste(readLines(file.path(cfg$site_path, "search_index.json"),
-                    warn = FALSE), collapse = "\n")
+    .read_text_utf8(file.path(cfg$site_path, "search_index.json"))
   else "{}"
 
   html <- tpl
@@ -139,7 +138,7 @@ generate_viewer <- function(targets_data, function_names, cfg,
     if (is.na(path) || !nzchar(path))
       stop("Template not found: inst/templates/", filename)
   }
-  paste(readLines(path, warn = FALSE), collapse = "\n")
+  .read_text_utf8(path)
 }
 
 #' Shape the run history for the viewer

@@ -33,7 +33,7 @@ generate_llms_txt <- function(targets_data,
   )
 
   out_path <- file.path(cfg$project_path, "llms.txt")
-  writeLines(content, out_path)
+  .write_lines_utf8(content, out_path)
   message("llms.txt written: ", out_path)
   invisible(out_path)
 }

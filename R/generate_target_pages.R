@@ -217,15 +217,15 @@ generate_all_target_pages <- function(targets_data, cfg) {
 
   if (!file.exists(path)) {
     # New file -- write header + generated block with empty notes section
-    writeLines(paste0(
+    .write_lines_utf8(paste0(
       header,
       generated_section
     ), path)
   } else {
     # Existing file -- replace only the generated block, preserve everything else
-    existing <- paste(readLines(path, warn = FALSE), collapse = "\n")
+    existing <- .read_text_utf8(path)
     new_content <- .replace_generated_block(existing, header, generated_section)
-    writeLines(new_content, path)
+    .write_lines_utf8(new_content, path)
   }
 }
 
@@ -278,7 +278,7 @@ generate_all_target_pages <- function(targets_data, cfg) {
 #' @keywords internal
 .find_target_line <- function(target_name, targets_file) {
   if (!file.exists(targets_file)) return(NULL)
-  lines   <- readLines(targets_file, warn = FALSE)
+  lines   <- .read_lines_utf8(targets_file)
   pattern <- paste0("tar_target\\s*\\(\\s*", target_name, "\\b")
   hits    <- grep(pattern, lines, perl = TRUE)
   if (length(hits) == 0) return(NULL)
