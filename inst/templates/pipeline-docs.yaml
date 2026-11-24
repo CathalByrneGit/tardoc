@@ -61,6 +61,16 @@ jobs:
         run: targets::tar_make()
         shell: Rscript {0}
 
+      # Each run starts from a fresh checkout, so without this the "Build
+      # history" on a target's page never has more than one build to draw. The
+      # previous deploy published its history.json; this fetches it so the next
+      # snapshot is added to it. A first deploy (404) just starts a history.
+      - name: Restore the build history
+        run: |
+          mkdir -p tardoc
+          curl -fsSL "https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}/history.json" \
+            -o tardoc/history.json || rm -f tardoc/history.json
+
       - name: Generate the documentation
         run: |
           tardoc::document_targets(

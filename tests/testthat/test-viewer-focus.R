@@ -26,8 +26,8 @@ test_that("traversal is directional", {
   # Upstream follows edges backwards only and downstream forwards only, so a
   # shared function does not pull its other users into the neighbourhood.
   s <- tpl()
-  expect_match(s, "reach(id, FOCUS_UP, depth)", fixed = TRUE)
-  expect_match(s, "reach(id, FOCUS_DOWN, depth)", fixed = TRUE)
+  expect_match(s, "reach(id, FOCUS_UP, depth, graphFilter)", fixed = TRUE)
+  expect_match(s, "reach(id, FOCUS_DOWN, depth, graphFilter)", fixed = TRUE)
 })
 
 test_that("hidden function nodes are not counted", {

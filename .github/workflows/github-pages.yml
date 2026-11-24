@@ -76,6 +76,18 @@ jobs:
           # provides one -- this site has no use for a webR editor.
           cleanup: 'rm -f *.Rmd *.md *.yml _*; rm -rf playground'
 
+      # Every deploy starts from a fresh checkout, so the demo would otherwise
+      # show one build per target for ever and "Build history" never appear. The
+      # previous deploy published its history.json; fetching it lets this run
+      # add one more build to it. A first deploy (404) or an unreachable site
+      # just starts a new history.
+      - name: Restore the demo's build history
+        run: |
+          mkdir -p inst/examples/station-monitoring/tardoc
+          curl -fsSL "https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}/example/history.json" \
+            -o inst/examples/station-monitoring/tardoc/history.json \
+            || rm -f inst/examples/station-monitoring/tardoc/history.json
+
       # Must come after the site build: these are hundreds of .md files, and
       # litedown would otherwise render every one of them as a site page.
       - name: Build the example pipeline and document it

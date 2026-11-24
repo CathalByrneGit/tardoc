@@ -108,3 +108,47 @@ test_that("the filter is wired into the overview and the generated viewer", {
   expect_match(s, "(!graphFilter || graphFilter.has(n.id))", fixed = TRUE)
   expect_match(s, 'id="graph-filter"', fixed = TRUE)
 })
+
+# ---- focus counts follow the filter --------------------------------------------
+
+reach_with_node <- function(start, direction, within = NULL) {
+  s <- tpl()
+  harness <- c(
+    js_function(s, "reach"),
+    'const nodes = ["a","b","c","d","e"];',
+    'const RF_BY_ID = {}; nodes.forEach(id => { RF_BY_ID[id] = { id, kind: "stem" }; });',
+    'const document = { getElementById: () => ({ checked: false }) };',
+    'const DOWN = { a: ["b"], b: ["c"], c: ["d"], d: ["e"] };',
+    'const UP = { b: ["a"], c: ["b"], d: ["c"], e: ["d"] };',
+    sprintf('const within = %s;',
+            if (is.null(within)) "undefined" else
+              sprintf("new Set(%s)", jsonlite::toJSON(within))),
+    sprintf('console.log(JSON.stringify(reach(%s, %s, 0, within)));',
+            jsonlite::toJSON(start, auto_unbox = TRUE),
+            if (direction == "down") "DOWN" else "UP")
+  )
+  f <- withr::local_tempfile(fileext = ".js")
+  writeLines(harness, f)
+  as.character(jsonlite::fromJSON(system2("node", f, stdout = TRUE)))
+}
+
+test_that("without a filter, reach() walks the whole chain", {
+  skip_if(Sys.which("node") == "", "node is not available")
+  expect_identical(reach_with_node("a", "down"), c("b", "c", "d", "e"))
+})
+
+test_that("with a filter, reach() counts only nodes on screen", {
+  skip_if(Sys.which("node") == "", "node is not available")
+  # c is filtered out: b is reachable, and d and e are not, because the visible
+  # graph has no edge leading to them.
+  expect_identical(reach_with_node("a", "down", c("a", "b", "d", "e")), "b")
+  expect_identical(reach_with_node("e", "up", c("a", "b", "d", "e")), "d")
+})
+
+test_that("focus passes the filter and the filter itself does not use it", {
+  s <- tpl()
+  expect_match(s, "reach(id, FOCUS_UP, depth, graphFilter)", fixed = TRUE)
+  expect_match(s, "reach(id, FOCUS_DOWN, depth, graphFilter)", fixed = TRUE)
+  # selectNodes builds the filter, so it must not be limited by the previous one.
+  expect_match(s, "reach(id, FOCUS_UP,   t.up)", fixed = TRUE)
+})

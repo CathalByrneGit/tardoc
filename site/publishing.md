@@ -80,7 +80,8 @@ The [live demo](example/) is the example pipeline in
 [`inst/examples/station-monitoring`](https://github.com/CathalByrneGit/tardoc/tree/main/inst/examples/station-monitoring),
 built and documented by
 [`.github/workflows/github-pages.yml`](https://github.com/CathalByrneGit/tardoc/blob/main/.github/workflows/github-pages.yml)
-on every push to `main`, report included. Nothing in it is hand-written, and it doubles as the
+on every push to `main`, report included, and keeps its build history by restoring the
+previous deploy's `history.json` before each run. Nothing in it is hand-written, and it doubles as the
 end-to-end test that `document_targets()` works on a clean machine with no store
 to start from.
 
@@ -101,3 +102,12 @@ host it without the cross-origin isolation headers webR is usually said to need.
 The measurements, the costs, and what a `publish_webr()` command would still have
 to settle are in the
 [webR design note](notes/webr-feasibility.html).
+
+## Keeping the build history
+
+A target's page draws its runtime and size across its builds, from
+`tardoc/history.json`. A CI run starts from a fresh checkout, so that file starts
+empty every time and the history never has a second build to show. The template
+workflow fetches the previous deploy's `history.json` before documenting, so each
+deploy adds one build to it; the first deploy, with nothing to fetch, starts a
+new one. The file keeps the last 50 snapshots.

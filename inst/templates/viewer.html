@@ -571,8 +571,13 @@ const FOCUS_UP = {}, FOCUS_DOWN = {};
 });
 let focusId = null;
 
-// depth 0 means unlimited.
-function reach(start, adj, depth) {
+// depth 0 means unlimited. `within`, when given, is the set of nodes actually
+// on screen (the graph filter): a node outside it is neither counted nor walked
+// through, because the visible graph has no edge to it. Without this the focus
+// bar said "3 upstream" while the filtered graph showed one node. The filter
+// itself is built from reach() and must not be limited by the previous filter,
+// so it calls this without `within`.
+function reach(start, adj, depth, within) {
   const fnShown = document.getElementById('show-functions').checked;
   const seen = {}, out = [];
   let frontier = [start], d = 0;
@@ -581,6 +586,7 @@ function reach(start, adj, depth) {
     frontier.forEach(function (id) {
       (adj[id] || []).forEach(function (n) {
         if (n === start || seen[n]) return;
+        if (within && !within.has(n)) return;
         // Functions the reader has not switched on are not in the graph, so
         // they are not in the count either.
         const v = RF_BY_ID[n];
@@ -599,8 +605,8 @@ function applyFocus(id) {
   focusId = id;
   const dir   = document.getElementById('focus-dir').value;
   const depth = parseInt(document.getElementById('focus-depth').value, 10);
-  const up   = dir === 'down' ? [] : reach(id, FOCUS_UP, depth);
-  const down = dir === 'up'   ? [] : reach(id, FOCUS_DOWN, depth);
+  const up   = dir === 'down' ? [] : reach(id, FOCUS_UP, depth, graphFilter);
+  const down = dir === 'up'   ? [] : reach(id, FOCUS_DOWN, depth, graphFilter);
 
   const keep = {}; keep[id] = 1;
   up.concat(down).forEach(function (n) { keep[n] = 1; });
@@ -1100,7 +1106,7 @@ if (GRAPH.nodes && GRAPH.nodes.length) {
       if (r.unmatched.length) filterStatus.className = 'warn';
     }
     filterVersion++;
-    rfClose();
+    rfClose();      // clears any focus: the graph was redrawn without it
     renderOverview(fnBox.checked);
   }
   let filterTimer = null;
