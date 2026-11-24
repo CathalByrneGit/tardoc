@@ -50,7 +50,7 @@ jobs:
       # igraph (a targets dependency) arrives unable to load for want of
       # libglpk.so.40. r-lib/actions resolves sysreqs itself, which is why
       # R-CMD-check never saw this.
-      - uses: yihui/actions/setup-r-dependencies@main
+      - uses: yihui/actions/setup-r-dependencies@a0966f3483a38f17d4249ebaad538e0f6f5e0e1e  # main, pinned
         with:
           dependencies: 'Depends, Imports, LinkingTo'
           extra-packages: litedown xfun .
@@ -68,7 +68,7 @@ jobs:
           mkdir -p site/notes site/example
           touch -d '2000-01-01' site/notes/index.html site/example/index.html
 
-      - uses: yihui/actions/litedown-site@main
+      - uses: yihui/actions/litedown-site@a0966f3483a38f17d4249ebaad538e0f6f5e0e1e  # main, pinned
         with:
           site-dir: 'site'
           # The default leaves the .md sources beside the .html they produced,

@@ -274,3 +274,20 @@ test_that("the viewer embeds the graph and keeps its navigation functions", {
     expect_true(grepl(fn, html, fixed = TRUE), info = fn)
   }
 })
+
+test_that("stacking within a layer avoids needless edge crossings", {
+  nodes <- c("a", "b", "c", "d", "w", "x", "y", "z")
+  e <- data.frame(from = c("a", "b", "c", "d"), to = c("y", "z", "x", "w"))
+  p <- dag_layout(nodes, e)
+  y <- stats::setNames(p$y, p$name)
+  # a..d feed y, z, x, w: the second column must follow that order.
+  expect_true(all(diff(y[c("y", "z", "x", "w")]) > 0))
+})
+
+test_that("layout is deterministic and keeps unconnected nodes in order", {
+  nodes <- c("p", "q", "r")
+  p1 <- dag_layout(nodes, data.frame(from = character(), to = character()))
+  p2 <- dag_layout(nodes, data.frame(from = character(), to = character()))
+  expect_identical(p1, p2)
+  expect_equal(p1$y, c(0, 90, 180))
+})
