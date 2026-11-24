@@ -14,7 +14,8 @@
 #'
 #' Computes a left-to-right layered layout: each node's column is its
 #' longest-path depth from a root, and nodes sharing a column are stacked
-#' vertically and centred against the tallest column.
+#' vertically and centred against the tallest column. Within a column nodes are
+#' ordered by repeated barycentre sweeps to reduce edge crossings.
 #'
 #' Cycles cannot occur in a `targets` pipeline, but a malformed edge list could
 #' contain one. Rather than looping forever, any node still unresolved once no
@@ -72,13 +73,43 @@ dag_layout <- function(nodes, edges, x_spacing = 220, y_spacing = 90) {
     layer[is.na(layer)] <- if (length(settled) > 0) max(settled) else 0L
   }
 
+  # Order within each layer to cut edge crossings: sweep left-to-right then
+  # right-to-left, placing each node at the mean position of its neighbours in
+  # the adjacent layer (the barycentre heuristic). Ties and unconnected nodes
+  # keep their current relative order, so the result is deterministic.
+  layers <- sort(unique(layer))
+  rank   <- stats::setNames(numeric(length(nodes)), nodes)
+  for (l in layers) rank[nodes[layer == l]] <- seq_len(sum(layer == l))
+  nbrs_in  <- split(from, factor(to,   levels = nodes))
+  nbrs_out <- split(to,   factor(from, levels = nodes))
+  sweep <- function(ls, nbrs) {
+    for (l in ls) {
+      mem <- nodes[layer == l]
+      if (length(mem) < 2L) next
+      bary <- vapply(mem, function(n) {
+        q <- nbrs[[n]]
+        q <- q[q %in% nodes[layer != l]]
+        if (length(q)) mean(rank[q]) else NA_real_
+      }, numeric(1))
+      # A node with no neighbour on that side stays where it is.
+      bary[is.na(bary)] <- rank[mem][is.na(bary)]
+      ord <- order(bary, rank[mem])
+      rank[mem[ord]] <<- seq_along(mem)
+    }
+  }
+  for (i in seq_len(4L)) {
+    sweep(layers[-1], nbrs_in)
+    sweep(rev(layers)[-1], nbrs_out)
+  }
+
   # Stack within each layer, then centre every column on the tallest one.
   counts  <- table(layer)
   tallest <- max(as.integer(counts))
   x <- numeric(length(nodes))
   y <- numeric(length(nodes))
-  for (l in sort(unique(layer))) {
+  for (l in layers) {
     idx <- which(layer == l)
+    idx <- idx[order(rank[nodes[idx]])]
     x[idx] <- l * x_spacing
     y[idx] <- (seq_along(idx) - 1) * y_spacing +
       (tallest - length(idx)) * y_spacing / 2

@@ -173,3 +173,19 @@ test_that("a failing setter is reported, not swallowed", {
   expect_message(ok <- .configure_chat_for_analytics(chat, NULL), "system prompt")
   expect_false(ok)
 })
+
+test_that(".db_had_extensions reads the flags from a real database", {
+  skip_if_not_installed("duckdb")
+  skip_if_not_installed("DBI")
+  mk <- function(emb, faiss, mcp) {
+    p <- tempfile(fileext = ".duckdb")
+    con <- DBI::dbConnect(duckdb::duckdb(), p)
+    DBI::dbWriteTable(con, "_meta", data.frame(has_embeddings = emb, has_faiss = faiss, has_mcp = mcp))
+    DBI::dbDisconnect(con, shutdown = TRUE)
+    p
+  }
+  expect_false(.db_had_extensions(mk(FALSE, FALSE, FALSE)))
+  expect_true(.db_had_extensions(mk(TRUE, FALSE, FALSE)))
+  expect_true(.db_had_extensions(mk(FALSE, FALSE, TRUE)))
+  expect_false(.db_had_extensions(tempfile(fileext = ".duckdb")))
+})
