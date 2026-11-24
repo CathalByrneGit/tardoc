@@ -117,6 +117,9 @@ document_targets <- function(project_path  = ".",
       base_url       = llm_base_url,
       refresh        = llm_refresh
     )
+  } else {
+    # The pages were just rewritten; bring back what an earlier run explained.
+    .restore_cached_explanations(function_names, cfg)
   }
 
   # Descriptions already on the pages (written by an earlier llm = TRUE run, or

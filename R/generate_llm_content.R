@@ -219,6 +219,38 @@ generate_llm_content <- function(targets_data, function_names, cfg,
 }
 
 
+#' Put cached function explanations back on the pages
+#'
+#' The function pages are rewritten on every run, which drops an explanation
+#' written by an earlier `llm = TRUE` run. The cache (`llm_cache.json`) still
+#' has it, keyed on the function's source and docs, so a plain rerun restores
+#' it for free -- no model, no network. A function whose source or docs changed
+#' has a different key and gets no explanation until the next `llm = TRUE` run,
+#' rather than a stale one.
+#'
+#' @param function_names Functions with a page.
+#' @param cfg A site config list.
+#' @return The number of explanations restored, invisibly.
+#' @keywords internal
+.restore_cached_explanations <- function(function_names, cfg) {
+  cache <- .read_llm_cache(cfg)
+  if (!length(cache) || !length(function_names)) return(invisible(0L))
+  r_files <- .function_r_files(cfg)
+  n <- 0L
+  for (fn in function_names) {
+    src <- .find_function_file(fn, r_files)
+    if (is.null(src)) next
+    code <- .file_functions(src)[[fn]]$text
+    if (is.null(code)) next
+    docs <- suppressWarnings(get_fn_docs(fn, src))
+    expl <- cache[[.explanation_key(code, docs)]]
+    if (is.null(expl) || !nzchar(expl)) next
+    .inject_explanation(file.path(cfg$functions_dir, paste0(fn, ".md")), expl)
+    n <- n + 1L
+  }
+  invisible(n)
+}
+
 `%||%` <- function(x, y) if (is.null(x)) y else x
 
 #' What a function's explanation was generated from
