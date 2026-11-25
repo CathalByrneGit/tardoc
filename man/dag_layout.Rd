@@ -21,7 +21,8 @@ A data frame with \code{name}, \code{layer}, \code{x} and \code{y}.
 \description{
 Computes a left-to-right layered layout: each node's column is its
 longest-path depth from a root, and nodes sharing a column are stacked
-vertically and centred against the tallest column.
+vertically and centred against the tallest column. Within a column nodes are
+ordered by repeated barycentre sweeps to reduce edge crossings.
 }
 \details{
 Cycles cannot occur in a \code{targets} pipeline, but a malformed edge list could
